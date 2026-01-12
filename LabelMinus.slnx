@@ -2,5 +2,5 @@
   <Folder Name="/解决方案项/">
     <File Path="Labels.cs" />
   </Folder>
-  <Project Path="mylabel.csproj" />
+  <Project Path="LabelMinus.csproj" />
 </Solution>

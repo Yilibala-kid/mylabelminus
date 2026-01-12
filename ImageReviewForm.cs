@@ -1,0 +1,1125 @@
+﻿using SharpCompress.Archives;
+using SkiaSharp;
+using SkiaSharp.Views.Desktop;
+using System.Data;
+using System.Drawing.Imaging;
+
+
+namespace mylabel
+{
+    public partial class ImageReviewForm : Form
+    {
+        private bool _isKeyDown = false;
+
+        #region 主窗口相关
+        // 定义一个变量来保存主窗口的引用
+        private LabelMinusForm _mainOwner;
+
+        // 修改构造函数，接收 LabelMinusForm
+        public ImageReviewForm(LabelMinusForm owner)
+        {
+            InitializeComponent();
+            this.Name = "ImageReviewForm";
+            _mainOwner = owner; // 拿到主窗口的“遥控器”
+        }
+        #endregion
+        private string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".webp" };
+        private string[] archiveExts = { ".zip", ".7z", ".rar" };
+
+        private class ViewState
+        {
+            public SKBitmap Image { get; set; }           // 给 GPU 渲染用 (SkiaSharp)
+            public System.Drawing.Image GdiImage { get; set; } // 给截图/合成/保存用 (GDI+)
+            public float Scale { get; set; } = 1f;
+            public PointF Offset { get; set; } = new PointF(0, 0);
+            public string ImagePath { get; set; } = string.Empty;
+        }
+        private Dictionary<Control, ViewState> _viewStates = new Dictionary<Control, ViewState>();
+
+
+        private List<string> _leftFolderFiles = new List<string>();
+        private List<string> _rightFolderFiles = new List<string>();
+        private string _leftZipPath = null;
+        private string _rightZipPath = null;
+        private string GetPureFileName(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return string.Empty;
+            // 去掉自定义的 [Zip] 前缀
+            string cleanPath = path.StartsWith("[Zip]") ? path.Substring(5) : path;
+            // 提取文件名（不管它在不在压缩包子文件夹里）
+            return Path.GetFileNameWithoutExtension(cleanPath);
+        }
+        private PointF ScreenToImage(Control pb, Point screenPoint)
+        {
+            // 如果字典里没有这个控件的状态，直接返回
+            if (!_viewStates.ContainsKey(pb)) return PointF.Empty;
+
+            var state = _viewStates[pb];
+            // 公式：(当前坐标 - 偏移量) / 缩放比例 = 原始图片像素坐标
+            float x = (screenPoint.X - state.Offset.X) / state.Scale;
+            float y = (screenPoint.Y - state.Offset.Y) / state.Scale;
+            return new PointF(x, y);
+        }
+        private Point mouseDownLocation;
+        private bool isDragging = false;
+        private bool isPotentialClick = false; // 用来标记是否可能是点击
+        private bool isLinked = true;
+        private const int ClickThreshold = 5; // 像素阈值
+
+
+        private bool isScreenShotMode = false;      // 是否处于截图模式
+        private Point ScreenShotStartPoint;         // 截图起点
+        private Rectangle ScreenShotRect;           // 当前拉框的矩形区域（屏幕坐标）
+        private bool isSelectingRect = false; // 是否正在拉框
+
+        private SKGLControl PicReview1;
+        private SKGLControl PicReview2;
+        public ImageReviewForm()
+        {
+            InitializeComponent();
+        }
+        #region GPU渲染
+        private void InitGpuControls()
+        {
+            // 1. 创建新控件
+            PicReview1 = CreateGpuControl(PicReview1_Placeholder);
+            PicReview2 = CreateGpuControl(PicReview2_Placeholder);
+
+            RemovePlaceholder(PicReview1_Placeholder);
+            RemovePlaceholder(PicReview2_Placeholder);
+        }
+
+        private void RemovePlaceholder(PictureBox pb)
+        {
+            if (pb == null) return;
+
+            // 从父容器（SplitContainer 的 Panel）中移除
+            if (pb.Parent != null)
+            {
+                pb.Parent.Controls.Remove(pb);
+            }
+
+            // 彻底销毁对象，释放句柄资源
+            pb.Dispose();
+        }
+        private SKGLControl CreateGpuControl(PictureBox placeholder)
+        {
+            // 1. 获取 PictureBox 所在的 Panel (SplitContainer 的 Panel1 或 Panel2)
+            Control parent = placeholder.Parent;
+            if (parent == null) return null;
+
+            var ctrl = new SKGLControl();
+
+            // 2. 必须在移除旧控件前，先复制布局属性
+            ctrl.Dock = DockStyle.Fill; // 既然是 Fill 在 SplitContainer 里，直接强制 Fill
+            ctrl.Name = "RealPicReview_" + placeholder.Name;
+
+            // 3. 绑定事件
+            ctrl.PaintSurface += PicView_PaintSurface;
+            ctrl.Click += PicView_Click;
+            ctrl.MouseDown += PicView_MouseDown;
+            ctrl.MouseMove += PicView_MouseMove;
+            ctrl.MouseWheel += PicView_MouseWheel;
+            ctrl.MouseUp += PicView_MouseUp;
+
+            // --- 在这里初始化字典，确保 Key 是新的 SKControl ---
+            _viewStates[ctrl] = new ViewState();
+
+            parent.Controls.Remove(placeholder);
+            parent.Controls.Add(ctrl);
+            ctrl.BringToFront();
+            parent.PerformLayout();
+            ctrl.Invalidate();
+            return ctrl;
+        }
+
+        #endregion
+        private void ImageReviewForm_Load(object sender, EventArgs e)
+        {
+            InitGpuControls();
+            // 强制开启 PictureBox 的双缓冲
+            var prop = typeof(Control).GetProperty("DoubleBuffered",
+                       System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            // 根据 isLinked 的初始值设置按钮颜色
+            LinkView.BackColor = isLinked ? Color.LightGreen : SystemColors.Control;
+        }
+        #region 图像绘制
+        private void PicView_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
+        {
+            //MessageBox.Show("Paint 事件触发了！");
+            // 将触发事件的控件识别为 pb
+            if (!(sender is Control pb)) return;
+            if (!_viewStates.ContainsKey(pb)) return;
+            var state = _viewStates[pb];
+            SKCanvas canvas = e.Surface.Canvas;
+            canvas.Clear(SKColors.SeaShell);
+
+            if (state.Image != null)
+            {
+                canvas.Save();
+                canvas.Translate(state.Offset.X, state.Offset.Y);
+                canvas.Scale(state.Scale, state.Scale);
+
+                // 使用高质量抗锯齿，GPU 会处理这些计算，不会卡顿
+                using (var paint = new SKPaint {})
+                {
+                    paint.IsAntialias = true;
+                    paint.FilterQuality = SKFilterQuality.Medium; // 关键：解决锯齿
+                    paint.IsDither = true;                      // 关键：解决颜色断层
+
+                    canvas.DrawBitmap(state.Image, 0, 0, paint);
+                }
+                canvas.Restore();
+            }
+            else
+            {
+                // 1. 创建画笔
+                using (var paint = new SKPaint())
+                {
+                    paint.Color = SKColors.Gray;
+                    paint.IsAntialias = true;
+
+                    // 2. 创建字体
+                    var typeface = SKTypeface.FromFamilyName("Microsoft YaHei");
+                    using (var font = new SKFont(typeface, 24))
+                    {
+                        // --- 换行逻辑开始 ---
+
+                        // 使用 \n 分隔字符串，或者手动拆分
+
+                        string[] lines = rawText.Split('\n');
+
+                        // 计算总高度，用于整体垂直居中
+                        float lineHeight = font.Metrics.Descent - font.Metrics.Ascent; // 字体实际占用高度
+                        float spacing = 10; // 行间距
+                        float totalHeight = (lines.Length * lineHeight) + ((lines.Length - 1) * spacing);
+
+                        // 计算起始起始 Y 坐标（垂直居中）
+                        float startY = (pb.Height - totalHeight) / 2 - font.Metrics.Ascent;
+
+                        for (int i = 0; i < lines.Length; i++)
+                        {
+                            string line = lines[i];
+
+                            // 计算当前行的宽度以水平居中
+                            float lineWidth = font.MeasureText(line);
+                            float x = Math.Max(10, (pb.Width - lineWidth) / 2);
+
+                            // 计算当前行的 Y 轴位置
+                            float currentY = startY + i * (lineHeight + spacing);
+
+                            // 绘制当前行
+                            canvas.DrawText(line, x, currentY, font, paint);
+                        }
+
+                        // --- 换行逻辑结束 ---
+                    }
+                }
+            }
+            // 绘制截图红框
+            if (isScreenShotMode && isSelectingRect)
+            {
+                using (var p = new SKPaint
+                {
+                    Color = SKColors.Red,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = 2,
+                    PathEffect = SKPathEffect.CreateDash(new float[] { 6, 4 }, 0)
+                })
+                {
+                    canvas.DrawRect(new SKRect(ScreenShotRect.Left, ScreenShotRect.Top, ScreenShotRect.Right, ScreenShotRect.Bottom), p);
+                }
+            }
+        }
+        //private void PicView_Paint(object sender, PaintEventArgs e)
+        //{
+        //    if (!(sender is PictureBox currentPic)) return;
+        //    // 从字典获取当前窗口的状态
+        //    if (!_viewStates.ContainsKey(currentPic) || _viewStates[currentPic].Image == null)
+        //    {
+        //        // 如果没图片，可以画一行提示字（可选）
+        //        e.Graphics.DrawString("点击此处加载文件夹", this.Font, Brushes.LightGray, 10, 10);
+        //        return;
+        //    }
+
+        //    var state = _viewStates[currentPic];
+        //    var img = state.Image;
+
+        //    // A. 基础环境设置
+        //    e.Graphics.Clear(Color.SeaShell);
+        //    e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+        //    // B. 应用坐标变换
+        //    e.Graphics.TranslateTransform(state.Offset.X, state.Offset.Y);
+        //    e.Graphics.ScaleTransform(state.Scale, state.Scale);
+
+        //    // C. 画图片
+        //    e.Graphics.DrawImage(img,
+        //            new RectangleF(0, 0, img.Width, img.Height),
+        //            new RectangleF(0, 0, img.Width, img.Height),
+        //            GraphicsUnit.Pixel);
+
+        //    if (isScreenShotMode && isSelectingRect)
+        //    {
+        //        // 记得重置变换，因为 ocrRect 是鼠标的屏幕坐标，不需要跟随图片的缩放移动
+        //        e.Graphics.ResetTransform();
+
+        //        // 1. 画一个半透明的黑色遮罩层 (可选，让选区更明显)
+        //        using (Brush overlay = new SolidBrush(Color.FromArgb(100, 0, 0, 0)))
+        //        {
+        //            // 这里可以简单画整个控件背景，或者更高级地只画选区之外的部分
+        //            // e.Graphics.FillRectangle(overlay, PicView.ClientRectangle);
+        //        }
+
+        //        // 2. 画选区边框（虚线红框）
+        //        using (Pen p = new Pen(Color.Red, 2))
+        //        {
+        //            p.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+        //            e.Graphics.DrawRectangle(p, ScreenShotRect);
+        //        }
+
+        //        // 3. (进阶) 在框旁边实时显示宽高像素值
+        //        string sizeText = $"{ScreenShotRect.Width} x {ScreenShotRect.Height}";
+        //        e.Graphics.DrawString(sizeText, this.Font, Brushes.Red, ScreenShotRect.X, ScreenShotRect.Y - 15);
+        //    }
+
+        //}
+        #endregion
+        #region PicView事件通用逻辑
+
+        private void PicView_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
+            var state = _viewStates[pb];
+            if (state.Image == null) return;
+
+            if (e.Button == MouseButtons.Left)
+            {
+                if (isScreenShotMode)
+                {
+                    isSelectingRect = true;
+                    ScreenShotStartPoint = e.Location;
+                    ScreenShotRect = new Rectangle(e.Location, new Size(0, 0));
+                }
+                else
+                {
+                    mouseDownLocation = e.Location;
+                    isDragging = false;
+                    isPotentialClick = true; // 标记可能是点击，MouseMove 中会判断位移
+                }
+            }
+        }
+
+        private void PicView_MouseMove(object sender, MouseEventArgs e)
+        {
+            // 1. 将 sender 转换为 Control，并从字典获取状态
+            if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
+            var state = _viewStates[pb];
+
+            // 2. 判定图片是否存在（现在检查 SKBitmap）
+            if (state.Image == null) return;
+            // --- 模式 1：截图/OCR 拉框模式 ---
+            if (isScreenShotMode && isSelectingRect)
+            {
+                int x = Math.Min(ScreenShotStartPoint.X, e.X);
+                int y = Math.Min(ScreenShotStartPoint.Y, e.Y);
+                int width = Math.Abs(ScreenShotStartPoint.X - e.X);
+                int height = Math.Abs(ScreenShotStartPoint.Y - e.Y);
+                ScreenShotRect = new Rectangle(x, y, width, height);
+
+                pb.Invalidate();
+                return;
+            }
+            // --- 模式 2：判断是否进入拖拽状态 ---
+            if (e.Button == MouseButtons.Left && isPotentialClick)
+            {
+                int dx = e.X - mouseDownLocation.X;
+                int dy = e.Y - mouseDownLocation.Y;
+                if (Math.Sqrt(dx * dx + dy * dy) > ClickThreshold)
+                {
+                    isDragging = true;
+                    isPotentialClick = false;
+                }
+            }
+            // --- 模式 3：执行平移（拖拽） ---
+            if (isDragging)
+            {
+                PointF tempOffset = state.Offset;
+                float dx = e.X - mouseDownLocation.X;
+                float dy = e.Y - mouseDownLocation.Y;
+
+                tempOffset.X += dx;
+                tempOffset.Y += dy;
+                state.Offset = tempOffset;
+
+                mouseDownLocation = e.Location;
+                pb.Invalidate(); // 触发当前控件重绘
+            }
+        }
+
+        private void PicView_MouseWheel(object sender, MouseEventArgs e)
+        {
+            if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
+            var state = _viewStates[pb];
+            if (state.Image == null) return;
+            float oldScale = state.Scale;
+
+            if (e.Delta > 0) state.Scale *= 1.1f;
+            else state.Scale /= 1.1f;
+
+            // 缩放围绕鼠标位置，使用当前状态的 Offset
+            PointF currentOffset = state.Offset;
+            currentOffset.X = e.X - (e.X - currentOffset.X) * (state.Scale / oldScale);
+            currentOffset.Y = e.Y - (e.Y - currentOffset.Y) * (state.Scale / oldScale);
+            state.Offset = currentOffset;
+
+            pb.Invalidate();
+
+            // 处理联动同步逻辑
+            if (isLinked)
+            {
+                Control otherPb = (pb == PicReview1) ? PicReview2 : PicReview1;
+                if (otherPb != null && _viewStates.ContainsKey(otherPb) && _viewStates[otherPb].Image != null)
+                {
+                    SyncView(pb, otherPb);
+                }
+            }
+        }
+        private async void PicView_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!(sender is Control currentPic)) return;
+            if (e.Button != MouseButtons.Left) return;
+
+            // --- 截图模式 ---
+            if (isScreenShotMode && isSelectingRect)
+            {
+                isSelectingRect = false;
+                if (ScreenShotRect.Width > 5 && ScreenShotRect.Height > 5)
+                {
+                    // 注意：CaptureScreenShotImageAndGetPath 内部如果涉及 PicView 
+                    // 也需要修改为传参 currentPic
+                    string filePath = CaptureScreenShotImageAndGetPath(currentPic);
+
+                    // 传入 currentPic，确保使用该窗口的 scale 和 offset
+                    PointF cornerPt = ScreenToImage(currentPic, new Point(ScreenShotRect.Right, ScreenShotRect.Top));
+
+                }
+            }
+            else if (isDragging && isLinked)
+            {
+                Control otherPb = (currentPic == PicReview1) ? PicReview2 : PicReview1;
+                // 执行对齐同步
+                SyncView(currentPic, otherPb);
+            }
+            isDragging = false;
+            isPotentialClick = false;
+        }
+        private void PicView_Click(object sender, EventArgs e)
+        {
+            // 1. 确保 sender 是 Control 类型
+            if (!(sender is Control pb)) return;
+            bool hasNoImage = !_viewStates.ContainsKey(pb) || _viewStates[pb].Image == null;
+            if (hasNoImage)
+            {
+                // 3. 判断是左边还是右边，打开文件夹
+                OpenFolderOrArchive(pb == PicReview1);
+            }
+        }
+        #endregion
+
+
+
+        #region 顶栏功能
+
+        private void PicNamecomboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // 这里的 SelectedItem 就是我们在 UpdateComboBox 里放入的“纯文件名”
+            string selectedName = PicNamecomboBox.SelectedItem?.ToString();
+            if (string.IsNullOrEmpty(selectedName)) return;
+
+            // 左右两边各自去自己的 list 里找这个“纯文件名”
+            ProcessAndLoad(PicReview1, _leftFolderFiles, _leftZipPath, selectedName, true);
+            ProcessAndLoad(PicReview2, _rightFolderFiles, _rightZipPath, selectedName, false);
+            this.Focus();           // 尝试给窗体
+        }
+        /// <summary>
+        /// 统一处理加载逻辑：自动识别是磁盘文件还是压缩包条目
+        /// </summary>
+        private void ProcessAndLoad(Control pb, List<string> fileList, string zipPath, string selectedName, bool isLeft)
+        {
+            if (fileList == null) { ClearPictureBox(pb); return; }
+
+            // 关键修改：统一提取列表项的“纯文件名”进行比对
+            string match = fileList.FirstOrDefault(f => GetPureFileName(f) == selectedName);
+            if (!string.IsNullOrEmpty(match))
+            {
+                // 如果是压缩包路径
+                if (match.StartsWith("[Zip]"))
+                {
+                    // 还原出压缩包内部的真实 Entry Key (带路径的那个)
+                    string entryKey = match.Substring(5);
+                    LoadFromArchive(pb, zipPath, entryKey, isLeft);
+                }
+                else
+                {
+                    // 普通物理路径加载
+                    ApplyImageToPictureBox(pb, match);
+                }
+            }
+            else
+            {
+                // 如果该侧没有同名文件，清空预览
+                ClearPictureBox(pb);
+            }
+        }
+        // 辅助方法：清空图片并重置状态
+        private void ClearPictureBox(Control pb)
+        {
+            // 1. 检查字典中是否有该控件的状态
+            if (_viewStates.ContainsKey(pb))
+            {
+                var state = _viewStates[pb];
+
+                // 2. 释放 GPU 位图资源 (极其重要，防止显存泄漏)
+                if (state.Image != null)
+                {
+                    state.Image.Dispose();
+                    state.Image = null;
+                }
+
+                // 3. 如果你有 GDI+ 备用图，也一并释放
+                if (state.GdiImage != null) { state.GdiImage.Dispose(); state.GdiImage = null; }
+
+                state.ImagePath = string.Empty;
+                state.Scale = 1.0f;
+                state.Offset = new PointF(0, 0);
+            }
+
+            // 4. 触发重绘，PaintSurface 会因为 Image 为 null 而画出提示文字
+            pb.Invalidate();
+        }
+        private void UpdateComboBox()
+        {
+            PicNamecomboBox.Items.Clear();
+        // 1. 处理左侧列表：安全检查并转换
+        var leftNames = (_leftFolderFiles ?? new List<string>())
+                            .Select(GetPureFileName)
+                            .Where(n => !string.IsNullOrEmpty(n));
+            // 2. 处理右侧列表：安全检查并转换
+            var rightNames = (_rightFolderFiles ?? new List<string>())
+                             .Select(GetPureFileName)
+                             .Where(n => !string.IsNullOrEmpty(n));
+            // 3. 取并集（去重）并排序
+            var allNames = leftNames.Union(rightNames)
+                                    .OrderBy(n => n)
+                                    .ToArray();
+            // 4. 添加到界面
+            PicNamecomboBox.Items.AddRange(allNames);
+        }
+
+        private void LastPic_Click(object sender, EventArgs e)
+        {
+            if (PicNamecomboBox.Items.Count <= 1) return;
+
+            int currentIndex = PicNamecomboBox.SelectedIndex;
+
+            // 计算上一个索引
+            if (currentIndex > 0)
+            {
+                PicNamecomboBox.SelectedIndex = currentIndex - 1;
+            }
+            else
+            {
+                // 如果想循环播放，就跳到最后一张
+                PicNamecomboBox.SelectedIndex = PicNamecomboBox.Items.Count - 1;
+            }
+        }
+        private void NextPic_Click(object sender, EventArgs e)
+        {
+            if (PicNamecomboBox.Items.Count <= 1) return;
+
+            int currentIndex = PicNamecomboBox.SelectedIndex;
+
+            // 计算下一个索引
+            if (currentIndex < PicNamecomboBox.Items.Count - 1)
+            {
+                PicNamecomboBox.SelectedIndex = currentIndex + 1;
+            }
+            else
+            {
+                // 如果想循环播放，就回到第一张
+                PicNamecomboBox.SelectedIndex = 0;
+            }
+        }
+        private void OpenFolder1_Click(object sender, EventArgs e) => OpenFolderOrArchive(true);
+
+
+        private void OpenFolder2_Click(object sender, EventArgs e) => OpenFolderOrArchive(false);
+
+        private void ScreenShotButton_Click(object sender, EventArgs e)
+        {
+            SetScreenShotMode(!isScreenShotMode);
+        }
+
+        private void ChangePic1_Click(object sender, EventArgs e) => LoadImageToPictureBox(PicReview1);
+        private void ChangePic2_Click(object sender, EventArgs e) => LoadImageToPictureBox(PicReview2);
+        private void ClearPic_Click(object sender, EventArgs e)
+        {
+            // 1. 清空后台文件列表数据
+            _leftFolderFiles.Clear();
+            _rightFolderFiles.Clear();
+
+            // 2. 清空 ComboBox 列表
+            PicNamecomboBox.Items.Clear();
+            PicNamecomboBox.Text = ""; // 确保显示的文字也被清除
+
+            // 3. 彻底清空左右两个图片框及对应的 ViewState
+            ClearPictureBox(PicReview1);
+            ClearPictureBox(PicReview2);
+
+            // 4. 给个简单的状态提示
+            MessageBox.Show("所有图片已清空");
+        }
+        #endregion
+
+
+        #region 底栏功能
+        private void FittoReViewButton_Click(object sender, EventArgs e)
+        {
+            ResetView(PicReview1);
+            ResetView(PicReview2);
+        }
+        private void LinkView_Click(object sender, EventArgs e)
+        {
+            isLinked = !isLinked;
+            LinkView.BackColor = isLinked ? Color.LightGreen : SystemColors.Control;
+
+            // 开启瞬间先做一次对齐
+            if (isLinked) ToRight_Click(null, null);
+        }
+
+        private void ToRight_Click(object sender, EventArgs e) => SyncView(PicReview1, PicReview2);
+        private void ToLeft_Click(object sender, EventArgs e) => SyncView(PicReview2, PicReview1);
+
+        private void SyncView(Control source, Control target)
+        {
+            // 1. 从字典中提取状态进行判定 (Control 没有 .Image)
+            if (!_viewStates.ContainsKey(source) || !_viewStates.ContainsKey(target)) return;
+
+            var sState = _viewStates[source];
+            var tState = _viewStates[target];
+
+            // 2. 判定两边是否都有图片
+            if (sState.Image == null || tState.Image == null) return;
+
+            // 3. 计算图片宽度比例 (使用 SKBitmap 的宽度)
+            // 这样即便左边是 1000px，右边是 2000px，也能完美同步位置
+            float ratio = (float)tState.Image.Width / sState.Image.Width;
+
+            // 4. 同步缩放和偏移
+            tState.Scale = sState.Scale * ratio;
+            tState.Offset = new PointF(sState.Offset.X * ratio, sState.Offset.Y * ratio);
+
+            // 5. 通知目标控件重绘
+            target.Invalidate();
+        }
+        private void ScreenShotFolderbutton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // 1. 获取你的截图保存目录
+                string tempDir = Path.Combine(Application.StartupPath, "ScreenShottemp");
+
+                // 2. 检查文件夹是否存在，不存在则创建（防止报错）
+                if (!Directory.Exists(tempDir))
+                {
+                    Directory.CreateDirectory(tempDir);
+                }
+
+                // 3. 调用资源管理器打开文件夹
+                // 使用 Process.Start 直接打开路径
+                System.Diagnostics.Process.Start("explorer.exe", tempDir);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("无法打开文件夹: " + ex.Message);
+            }
+        }
+        #endregion
+
+
+        #region 通用函数/加载文件夹、压缩包等
+        private void ResetView(Control pb)
+        {
+            if (!_viewStates.ContainsKey(pb)) return;
+            var state = _viewStates[pb];
+
+            // 注意：这里用 state.Image (SKBitmap) 的宽高来计算
+            if (state.Image == null) return;
+
+            float scaleX = (float)pb.Width / state.Image.Width;
+            float scaleY = (float)pb.Height / state.Image.Height;
+            state.Scale = Math.Min(scaleX, scaleY);
+
+            state.Offset = new PointF(
+                (pb.Width - state.Image.Width * state.Scale) / 2,
+                (pb.Height - state.Image.Height * state.Scale) / 2
+            );
+
+            pb.Invalidate(); // 触发重绘
+        }
+        private void LoadImageToPictureBox(Control pb)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "图片文件|*.jpg;*.jpeg;*.png;*.bmp";
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    // 确保字典中有这个 Key
+                    if (!_viewStates.ContainsKey(pb)) _viewStates[pb] = new ViewState();
+                    var state = _viewStates[pb];
+
+                    // 1. 释放旧资源 (针对 SKBitmap)
+                    if (state.Image != null)
+                    {
+                        state.Image.Dispose();
+                        state.Image = null;
+                    }
+
+                    // 2. 加载新图片 (使用 SkiaSharp 解码)
+                    // 注意：不再使用 System.Drawing.Image，直接生成 SKBitmap
+                    using (var stream = System.IO.File.OpenRead(ofd.FileName))
+                    {
+                        state.Image = SKBitmap.Decode(stream);
+                    }
+                    state.ImagePath = ofd.FileName;
+
+                    // 3. 重置视角并重绘
+                    ResetView(pb);
+                    pb.Invalidate();
+                }
+            }
+        }
+
+        private void OpenFolderOrArchive(bool isLeft)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                // --- 关键修改：允许用户多选文件 ---
+                ofd.Multiselect = true;
+                ofd.Filter = "支持的格式|*.zip;*.7z;*.rar;*.jpg;*.png;*.bmp|压缩包|*.zip;*.7z;*.rar|图片|*.jpg;*.png;*.bmp";
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    List<string> finalFiles = new List<string>();
+                    string zipPath = null;
+
+                    // 如果用户只选了一个文件，且是压缩包
+                    if (ofd.FileNames.Length == 1 && archiveExts.Contains(Path.GetExtension(ofd.FileName).ToLower()))
+                    {
+                        zipPath = ofd.FileName;
+                        finalFiles = LoadEntriesFromZip(zipPath);
+                    }
+                    else
+                    {
+                        // 如果用户选了多个文件，或者选了一个普通图片
+                        // 我们只加载用户选中的那些图片，而不是整个文件夹
+                        zipPath = null;
+                        finalFiles = ofd.FileNames
+                            .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                            .ToList();
+                    }
+
+                    // 赋值到全局变量
+                    if (isLeft) { _leftZipPath = zipPath; _leftFolderFiles = finalFiles; }
+                    else { _rightZipPath = zipPath; _rightFolderFiles = finalFiles; }
+
+                    // 更新 UI
+                    UpdateComboBox();
+                    if (PicNamecomboBox.Items.Count > 0) PicNamecomboBox.SelectedIndex = 0;
+                }
+            }
+        }
+        private List<string> LoadEntriesFromZip(string zipFilePath)
+        {
+            List<string> entryNames = new List<string>();
+            using (var archive = SharpCompress.Archives.ArchiveFactory.Open(zipFilePath))
+            {
+                foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+                {
+                    string ext = Path.GetExtension(entry.Key).ToLower();
+                    if (imageExtensions.Contains(ext))
+                    {
+                        // 统一格式，方便后续 ProcessAndLoad 匹配
+                        entryNames.Add("[Zip]" + entry.Key);
+                    }
+                }
+            }
+            return entryNames;
+        }
+        private void LoadFromArchive(Control pb, string zipPath, string entryKey, bool isLeft)
+        {
+            try
+            {
+                // 1. 确定临时保存路径 (使用不同的前缀防止左右窗口冲突)
+                string side = isLeft ? "left" : "right";
+                string tempDir = Path.Combine(Application.StartupPath, "Archivetemp");
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+
+                string tempFile = Path.Combine(tempDir, $"zip_{side}_{Path.GetFileName(entryKey)}");
+
+                // 2. 解压条目
+                using (var archive = SharpCompress.Archives.ArchiveFactory.Open(zipPath))
+                {
+                    var entry = archive.Entries.FirstOrDefault(e => e.Key == entryKey);
+                    if (entry != null)
+                    {
+                        using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write))
+                        {
+                            entry.WriteTo(fs);
+                        }
+
+                        // 3. 调用你已有的通用加载函数
+                        ApplyImageToPictureBox(pb, tempFile);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"解压失败: {ex.Message}");
+            }
+        }
+        private void ApplyImageToPictureBox(Control pb, string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+
+            // 确保字典中有这个控件的状态记录
+            if (!_viewStates.ContainsKey(pb)) _viewStates[pb] = new ViewState();
+            var state = _viewStates[pb];
+
+            // 1. 释放旧资源 (现在通过 state.Image 访问，它是 SKBitmap)
+            if (state.Image != null)
+            {
+                state.Image.Dispose();
+                state.Image = null; // 相当于以前的 pb.Image = null
+            }
+
+            // 2. 加载新图片 (使用 SkiaSharp 专用解码，不锁定文件)
+            try
+            {
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    // 直接将流解码为 SKBitmap 存入字典
+                    state.Image = SKBitmap.Decode(fs);
+                    state.ImagePath = filePath;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"图片加载失败: {ex.Message}");
+                return;
+            }
+
+            // 3. 重置视角并重绘
+            ResetView(pb);
+            // 4. 触发 GPU 控件的 PaintSurface 事件进行渲染
+            pb.Invalidate();
+        }
+        #endregion
+
+        #region 按键功能
+        string rawText = "点击此处加载文件夹/图片\nQ(按住)：截图\nA：上一张\nD：下一张\nR：重置显示";
+        // 按键按下
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // 拦截方向键
+            if (PicNamecomboBox.Items.Count > 0)
+            {
+                // 注意：ProcessCmdKey 也会受到长按重发的影响
+                // 如果想禁止长按连发，这里依然需要 if (_isKeyDown) return true;
+
+                switch (keyData)
+                {
+                    case Keys.Left:
+                    case Keys.Up:
+                        LastPic_Click(null, null);
+                        return true;
+                    case Keys.Right:
+                    case Keys.Down:
+                        NextPic_Click(null, null);
+                        return true;
+                }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+        private void myKeyDown(object sender, KeyEventArgs e)
+        {
+            if(_isKeyDown) return; // 防止按键重复触发
+            _isKeyDown = true;
+            bool hasItems = PicNamecomboBox.Items.Count > 0;// 如果列表为空，方向键逻辑不执行，但 'A' 键截图模式仍可执行
+
+            switch (e.KeyCode)
+            {
+                // A键截图
+                case Keys.Q:
+                    SetScreenShotMode(true);
+                    e.Handled = true;
+                    break;
+
+                // R 键重置显示
+                case Keys.R:
+                    ResetView(PicReview1);
+                    ResetView(PicReview2);
+                    e.Handled = true;
+                    break;
+
+                // Q切换到上一张
+                case Keys.A:
+                    if (hasItems)
+                    {
+                        LastPic_Click(null, null);
+                        e.Handled = true;
+                    }
+                    break;
+
+                // E切换到下一张
+                case Keys.D:
+
+                    if (hasItems)
+                    {
+                        NextPic_Click(null, null);
+                        e.Handled = true;
+                    }
+                    break;
+            }
+        }
+        // 按键松开
+        private void myKeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Q)
+            {
+                SetScreenShotMode(false);
+                e.Handled = true;
+            }
+            _isKeyDown = false;
+        }
+        // 将核心逻辑提取出来，接受一个明确的 bool 值
+        private void SetScreenShotMode(bool active)
+        {
+            // 避免重复触发：如果状态没变，直接返回
+            if (isScreenShotMode == active) return;
+
+            isScreenShotMode = active;
+
+            // 1. UI 视觉反馈
+            ScreenShotButton.BackColor = isScreenShotMode ? Color.LightGreen : SystemColors.Control;
+            ScreenShotButton.Text = isScreenShotMode ? "退出截图" : "截图(Q)";
+
+            // 2. 重置拉框状态
+            isSelectingRect = false;
+            ScreenShotRect = Rectangle.Empty;
+
+            // 3. 刷新视图
+            PicReview1.Invalidate();
+            PicReview2.Invalidate();
+        }
+        #endregion
+
+
+
+
+        #region 截图功能
+        /// <summary>
+        /// 核心函数：根据当前截图矩形，从两个 PictureBox 中裁剪对应区域，
+        /// </summary>
+        private string CaptureScreenShotImageAndGetPath(Control pb)
+        {
+
+            try
+            {
+                Control otherPb = (pb == PicReview1) ? PicReview2 : PicReview1;
+
+                // 判定哪边有图
+                bool hasLeft = _viewStates.ContainsKey(PicReview1) && _viewStates[PicReview1].Image != null;
+                bool hasRight = _viewStates.ContainsKey(PicReview2) && _viewStates[PicReview2].Image != null;
+                if (!hasLeft && !hasRight) return null;
+
+                // 获取当前操作的图（主图）
+                var stateActive = _viewStates[pb];
+                var imgActive = stateActive.Image;
+                SKBitmap imgOther = null;
+
+                // 计算主图的原始裁剪坐标 (x1, y1, w1, h1)
+                PointF imgStart = ScreenToImage(pb, new Point(ScreenShotRect.Left, ScreenShotRect.Top));
+                PointF imgEnd = ScreenToImage(pb, new Point(ScreenShotRect.Right, ScreenShotRect.Bottom));
+                float x1 = Math.Max(0, imgStart.X);
+                float y1 = Math.Max(0, imgStart.Y);
+                float w1 = Math.Min(imgActive.Width - x1, imgEnd.X - imgStart.X);
+                float h1 = Math.Min(imgActive.Height - y1, imgEnd.Y - imgStart.Y);
+
+                if (w1 <= 0 || h1 <= 0) return null;
+
+                // 2. 准备目录
+                string tempDir = Path.Combine(Application.StartupPath, "ScreenShottemp");
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+                string filePath = Path.Combine(tempDir, $"ScreenShot_{DateTime.Now:yyyyMMdd_HHmmss}.jpg");
+                // 2. 准备副图参数
+                bool hasOther = (otherPb == PicReview1 ? hasLeft : hasRight);
+                float x2 = 0, y2 = 0, w2 = 0, h2 = 0;
+                if (hasOther)
+                {
+                    imgOther = _viewStates[otherPb].Image;
+                    // 比例同步裁剪
+                    float ratioX = x1 / imgActive.Width;
+                    float ratioY = y1 / imgActive.Height;
+                    float ratioW = w1 / imgActive.Width;
+                    float ratioH = h1 / imgActive.Height;
+
+                    x2 = ratioX * imgOther.Width;
+                    y2 = ratioY * imgOther.Height;
+                    w2 = ratioW * imgOther.Width;
+                    h2 = ratioH * imgOther.Height;
+
+                    // 边界检查
+                    x2 = Math.Max(0, x2);
+                    y2 = Math.Max(0, y2);
+                    w2 = Math.Min(imgOther.Width - x2, w2);
+                    h2 = Math.Min(imgOther.Height - y2, h2);
+                }
+
+                // 3. 计算画布尺寸
+                int footerHeight = 40;
+                // 如果有副图，宽度是 w1+w2；没副图，宽度就是 w1
+                int combinedWidth = hasOther ? (int)(w1 + w2) : (int)w1;
+                int combinedHeight = hasOther ? (int)Math.Max(h1, h2) + footerHeight : (int)h1 + footerHeight;
+
+                // 4. 绘图
+                using (Bitmap combinedBmp = new Bitmap(combinedWidth, combinedHeight))
+                {
+                    using (Graphics g = Graphics.FromImage(combinedBmp))
+                    {
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.Clear(Color.White);
+
+                        // --- 转换函数：将 SKBitmap 转为 GDI+ Image ---
+                        Image gdiActive = SKBitmapToGdiImage(imgActive);
+                        Image gdiOther = hasOther ? SKBitmapToGdiImage(imgOther) : null;
+                        // 判断主图应该画在左边还是右边
+                        if (!hasOther)
+                        {
+                            // 单图模式：直接画
+                            g.DrawImage(gdiActive, new Rectangle(0, 0, (int)w1, (int)h1), new RectangleF(x1, y1, w1, h1), GraphicsUnit.Pixel);
+                        }
+                        else
+                        {
+                            // 双图模式：确定左右顺序
+                            RectangleF leftSrcRect = (pb == PicReview1) ? new RectangleF(x1, y1, w1, h1) : new RectangleF(x2, y2, w2, h2);
+                            RectangleF rightSrcRect = (pb == PicReview2) ? new RectangleF(x1, y1, w1, h1) : new RectangleF(x2, y2, w2, h2);
+                            Image leftImg = (pb == PicReview1) ? gdiActive : gdiOther;
+                            Image rightImg = (pb == PicReview2) ? gdiActive : gdiOther;
+
+                            // 画左图
+                            g.DrawImage(leftImg, new Rectangle(0, 0, (int)leftSrcRect.Width, (int)leftSrcRect.Height), leftSrcRect, GraphicsUnit.Pixel);
+                            // 画右图
+                            g.DrawImage(rightImg, new Rectangle((int)leftSrcRect.Width, 0, (int)rightSrcRect.Width, (int)rightSrcRect.Height), rightSrcRect, GraphicsUnit.Pixel);
+
+                            // 画线
+                            using (Pen linePen = new Pen(Color.RoyalBlue, 2))
+                                g.DrawLine(linePen, leftSrcRect.Width, 0, leftSrcRect.Width, Math.Max(leftSrcRect.Height, rightSrcRect.Height));
+                        }
+
+                        // 绘制页脚文件名
+                        DrawFooterText(g, PicNamecomboBox.SelectedItem?.ToString() ?? "ScreenShot", combinedWidth, combinedHeight, footerHeight);
+                    }
+
+                    // 5. 压缩与剪贴板 (保持你原有代码逻辑)
+                    SaveImageWithCompression(combinedBmp, filePath, 1000000);
+                    using (Image compressedImg = Image.FromFile(filePath)) { Clipboard.SetImage(compressedImg); }
+                }
+
+                return filePath;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("裁剪图片失败: " + ex.Message);
+                return null;
+            }
+        }
+        private Image SKBitmapToGdiImage(SKBitmap skBitmap)
+        {
+            // 将 SkiaSharp 的像素数据导出并转换为 GDI+ 的 Bitmap
+            using (SKImage skImage = SKImage.FromBitmap(skBitmap))
+            using (SKData data = skImage.Encode(SKEncodedImageFormat.Png, 100))
+            using (MemoryStream ms = new MemoryStream(data.ToArray()))
+            {
+                return Image.FromStream(ms);
+            }
+        }
+        private void DrawFooterText(Graphics g, string text, int canvasWidth, int canvasHeight, int footerHeight)
+        {
+            // 1. 定义页脚矩形区域
+            Rectangle footerRect = new Rectangle(0, canvasHeight - footerHeight, canvasWidth, footerHeight);
+
+            // 2. 绘制页脚背景框 
+            using (Brush backBrush = new SolidBrush(Color.SeaShell))
+            {
+                g.FillRectangle(backBrush, footerRect);
+            }
+            // 配置箭头和间距
+            string arrows = "▲"; // 箭头后面加个空格
+
+            using (Font font = new Font("微软雅黑", 10, FontStyle.Bold))
+            using (Brush textBrush = new SolidBrush(Color.Black))
+            using (Brush arrowBrush = new SolidBrush(Color.RoyalBlue)) // 箭头用红色，更醒目
+            {
+                // 1. 测量箭头和主文字的尺寸
+                SizeF arrowSize = g.MeasureString(arrows, font);
+                SizeF textSize = g.MeasureString(text, font);
+
+                // 2. 计算总宽度，以便整体居中
+                float totalWidth = arrowSize.Width + textSize.Width;
+
+                // 3. 计算起始 X 坐标（为了让“箭头+文字”整体居中）
+                float startX = (canvasWidth - totalWidth) / 2;
+
+                // 4. 计算 Y 坐标（在 footer 区域内垂直居中）
+                float textY = (canvasHeight - footerHeight) + (footerHeight - textSize.Height) / 2;
+
+                // 5. 先画箭头（左侧）
+                g.DrawString(arrows, font, arrowBrush, startX, textY);
+
+                // 6. 再画文字（紧跟在箭头后面）
+                g.DrawString(text, font, textBrush, startX + arrowSize.Width, textY);
+            }
+        }
+        private void SaveImageWithCompression(Bitmap bmp, string path, long targetSize)
+        {
+            long quality = 90; // 初始质量 90%
+            EncoderParameters encoderParams = new EncoderParameters(1);
+            ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
+
+            do
+            {
+                encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+                bmp.Save(path, jpegCodec, encoderParams);
+
+                FileInfo fi = new FileInfo(path);
+                if (fi.Length <= targetSize || quality <= 20) // 如果小于1MB 或 质量已经降到20%则停止
+                {
+                    break;
+                }
+                quality -= 10; // 每次降低 10% 质量尝试
+            } while (true);
+        }
+
+        // 获取 JPEG 编码器信息
+        private ImageCodecInfo GetEncoderInfo(string mimeType)
+        {
+            ImageCodecInfo[] codecs = ImageCodecInfo.GetImageEncoders();
+            return codecs.FirstOrDefault(c => c.MimeType == mimeType);
+        }
+        #endregion
+
+
+    }
+}
