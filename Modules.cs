@@ -1,89 +1,25 @@
 ﻿using Newtonsoft.Json;
 using SkiaSharp;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+
+using System;
+using System.Windows.Forms;
+
 
 namespace mylabel.Modules
 {
     public static class Modules
     {
-        //public static void GPUDrawAnnotations(SKCanvas canvas, ImageInfo currentImage, string currentImageName,
-        //                              SKSize imgSize, float scale, ImageLabel selectedLabel, float imageDpi)
-        //{
-        //    if (currentImage == null || currentImage.Labels == null) return;
 
-        //    foreach (var label in currentImage.Labels)
-        //    {
-        //        float x = (float)(label.Position.X * imgSize.Width);
-        //        float y = (float)(label.Position.Y * imgSize.Height);
-
-        //        bool isSelected = (label == selectedLabel);
-        //        SKColor themeColor = isSelected ? SKColors.Purple : SKColors.Red;
-
-        //        using (var paint = new SKPaint())
-        //        {
-        //            paint.IsAntialias = true;
-        //            paint.Color = themeColor;
-        //            paint.SubpixelText = true;
-
-        //            // 1. 绘制序号
-        //            float indexFontSize = 12f * imageDpi;
-        //            using (var indexTypeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold))
-        //            using (var indexFont = new SKFont(indexTypeface, indexFontSize))
-        //            {
-        //                string idxStr = label.Index.ToString();
-        //                SKRect idxBounds = new SKRect();
-        //                indexFont.MeasureText(idxStr, out idxBounds, paint);
-        //                // 更加精准的居中对齐
-        //                canvas.DrawText(idxStr, x - idxBounds.MidX, y - idxBounds.MidY, indexFont, paint);
-        //            }
-
-        //            // 2. 优化后的竖排文字绘制
-        //            if (!string.IsNullOrEmpty(label.Text))
-        //            {
-        //                float currentOriginFontSize = label.FontSize > 0 ? (float)label.FontSize : 12f;
-        //                float fontSize = currentOriginFontSize * imageDpi;
-
-        //                // 【关键：动态加载字体】
-        //                // 如果 label.FontFamily 无效，Skia 会自动 fallback 到系统默认
-        //                using (var typeface = SKTypeface.FromFamilyName(label.FontFamily, SKFontStyle.Normal))
-        //                using (var textFont = new SKFont(typeface, fontSize))
-        //                {
-        //                    // 设置行高倍数（1.2倍通常比较美观）
-        //                    float lineHeight = fontSize * 1.2f;
-        //                    // 文字起始位置：x 坐标向右偏移序号宽度的一半，再加点留白
-        //                    float startX = x + (indexFontSize * 0.8f);
-        //                    float currentY = y;
-
-        //                    foreach (char c in label.Text)
-        //                    {
-        //                        string charStr = c.ToString();
-
-        //                        // 测量当前字符的尺寸，用于精细对齐
-        //                        SKRect charBounds = new SKRect();
-        //                        textFont.MeasureText(charStr, out charBounds, paint);
-
-        //                        // 居中绘制字符：startX 是中心轴
-        //                        // 这样即使混排了不同宽度的字符（如 'i' 和 'W'），也能在垂直线上对齐
-        //                        float charX = startX - charBounds.MidX;
-
-        //                        // 绘制（注意：Skia 默认 Y 是基线，所以要加上文字高度的一部分）
-        //                        canvas.DrawText(charStr, charX, currentY + fontSize * 0.85f, textFont, paint);
-
-        //                        // 纵向步进
-        //                        currentY += lineHeight;
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
         /// <summary>
         /// 核心绘图函数：绘制序号及竖向文字
         /// </summary>
-        public static void DrawAnnotations(Graphics g, ImageInfo currentImage,Size imgSize, 
-                                                 float scale, ImageLabel selectedLabel, float imageDpi, bool onlyShowIndex = false)
+        public static void DrawAnnotations(Graphics g, ImageInfo currentImage, Size imgSize,
+                                                     float scale, ImageLabel selectedLabel, float imageDpi, bool onlyShowIndex = false)
         {
             // 如果当前图片对象为空，直接退出
             if (currentImage == null || currentImage.Labels == null) return;
@@ -150,26 +86,45 @@ namespace mylabel.Modules
         /// </summary>
         public static Dictionary<string, ImageInfo> ParseTextToLabels(string content)
         {
-            // 改为返回字典
             var database = new Dictionary<string, ImageInfo>();
+            var groupList = new List<string>(); // 存储从文件头读取到的动态分组
+
+            // 使用正则预编译，提高性能
+            var imgRegex = new Regex(@">>>>>>>>\[(.*?)\]<<<<<<<<", RegexOptions.Compiled);
+            var metaRegex = new Regex(@"----------------\[(\d+)\]----------------\[([\d\.]+),([\d\.]+),(\d+)\]", RegexOptions.Compiled);
+
             string[] lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             string currentImgName = string.Empty;
             ImageLabel currentLabel = null;
-
-            var imgRegex = new Regex(@">>>>>>>>\[(.*?)\]<<<<<<<<");
-            var metaRegex = new Regex(@"----------------\[(\d+)\]----------------\[([\d\.]+),([\d\.]+),(\d+)\]");
+            int hyphenCount = 0; // 用于追踪我们处理到了第几个 "-" 分隔符
 
             foreach (string rawLine in lines)
             {
                 string line = rawLine.Trim();
                 if (string.IsNullOrEmpty(line)) continue;
 
-                // 1. 识别图片行
+                // --- 1. 动态解析文件头部的分组信息 ---
+                if (line == "-")
+                {
+                    hyphenCount++;
+                    continue;
+                }
+
+                // 当处于第一个和第二个 "-" 之间时，认为这些行是分组名称
+                if (hyphenCount == 1)
+                {
+                    groupList.Add(line);
+                    continue;
+                }
+
+                // --- 2. 识别图片行 ---
                 var imgMatch = imgRegex.Match(line);
                 if (imgMatch.Success)
                 {
+                    // 移除后缀（如果你需要的话，可以用 Path.GetFileNameWithoutExtension）
                     currentImgName = imgMatch.Groups[1].Value;
+
                     if (!database.ContainsKey(currentImgName))
                     {
                         database[currentImgName] = new ImageInfo { ImageName = currentImgName };
@@ -177,33 +132,45 @@ namespace mylabel.Modules
                     continue;
                 }
 
-                // 2. 识别元数据行
+                // --- 3. 识别标注元数据行 ---
                 var metaMatch = metaRegex.Match(line);
                 if (metaMatch.Success)
                 {
-                    // 如果图片名还没识别到就出现了元数据，跳过或处理异常
                     if (string.IsNullOrEmpty(currentImgName)) continue;
 
                     int index = int.Parse(metaMatch.Groups[1].Value);
                     float x = float.Parse(metaMatch.Groups[2].Value);
                     float y = float.Parse(metaMatch.Groups[3].Value);
-                    int groupValue = int.Parse(metaMatch.Groups[4].Value);
+                    int groupIdx = int.Parse(metaMatch.Groups[4].Value);
+
+                    // 根据文件头的索引获取组名 (文件里是从 1 开始的)
+                    string groupName = "默认分组";
+                    if (groupIdx > 0 && groupIdx <= groupList.Count)
+                    {
+                        groupName = groupList[groupIdx - 1];
+                    }
+                    else
+                    {
+                        // 兼容性逻辑：如果 idx 是 1 或 2 且 groupList 为空
+                        if (groupIdx == 1) groupName = "框内";
+                        else if (groupIdx == 2) groupName = "框外";
+                    }
 
                     currentLabel = new ImageLabel
                     {
-                        Index = index, // 使用文件中的索引
+                        Index = index,
                         Position = new BoundingBox { X = x, Y = y, Width = 0f, Height = 0f },
-                        Group = (groupValue == 1 ? "框内" : "框外"),
+                        Group = groupName,
                         Text = ""
                     };
 
-                    // 直接添加到对应的 ImageInfo 中
                     database[currentImgName].Labels.Add(currentLabel);
                     continue;
                 }
 
-                // 3. 识别文本行
-                if (currentLabel != null && !line.StartsWith("-") && !line.StartsWith(">"))
+                // --- 4. 识别标注文本内容 ---
+                // 排除掉干扰行（如头部信息和分隔符）
+                if (currentLabel != null && hyphenCount >= 2 && !line.StartsWith(">") && !line.StartsWith("-"))
                 {
                     if (string.IsNullOrEmpty(currentLabel.Text))
                         currentLabel.Text = line;
@@ -222,15 +189,34 @@ namespace mylabel.Modules
         {
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
-            // 1. 写入固定的头部信息
+            // --- 1. 动态获取所有 Group 并排序 ---
+            // 找出所有图片中用到的所有组名，并去重
+            var allGroups = imageDatabase.Values
+                    .SelectMany(img => img.Labels)
+                    .Select(l => l.Group)
+                    .Distinct()
+                    .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)) // 强制框内=1, 框外=2
+                    .ThenBy(g => g) // 其余按字母排
+                    .ToList();
+
+            // 如果没有任何标签，至少给个默认值
+            if (allGroups.Count == 0) { allGroups.Add("框内"); allGroups.Add("框外"); }
+
+            // 建立 组名 -> 编号 的映射 (从 1 开始)
+            var groupToIdMap = new Dictionary<string, int>();
+
+            // 写入头部
             sb.AppendLine("1,0");
             sb.AppendLine("-");
-            sb.AppendLine("框内");
-            sb.AppendLine("框外");
+            for (int i = 0; i < allGroups.Count; i++)
+            {
+                string gName = allGroups[i];
+                groupToIdMap[gName] = i + 1; // 存储映射关系
+                sb.AppendLine(gName);       // 写入文件头
+            }
             sb.AppendLine("-");
             sb.AppendLine("Default Comment");
             sb.AppendLine("You can edit me");
-            sb.AppendLine();
             sb.AppendLine();
 
             // 2. 字典的 Keys 已经是唯一的图片名，直接排序后遍历
@@ -247,8 +233,11 @@ namespace mylabel.Modules
                 // 3. 遍历该图片下的所有标注（已经由 ImageInfo 管理，直接排序 Index 即可）
                 foreach (var label in imageInfo.Labels.OrderBy(l => l.Index))
                 {
-                    // 保持原有的 Group 逻辑
-                    int groupValue = label.Group == "框内" ? 1 : 2;
+                    // 从映射表中取值
+                    if (!groupToIdMap.TryGetValue(label.Group, out int groupValue))
+                    {
+                        groupValue = 1;
+                    }
 
                     // 写入标注行
                     sb.AppendLine($"----------------[{label.Index}]----------------[{label.Position.X:F3},{label.Position.Y:F3},{groupValue}]");
@@ -310,7 +299,200 @@ namespace mylabel.Modules
             }
             return "识别未成功";
         }
-
-
     }
+    public static class UIHelper
+    {
+
+        /// <summary>
+        /// 1. 递归绑定：点击非输入控件时，强制让目标控件（如PicView）获取焦点
+        /// </summary>
+        public static void BindFocusTransfer(Control parent, Control targetFocusControl)
+        {
+            foreach (Control ctrl in parent.Controls)
+            {
+                // 如果不是输入类控件，则绑定点击事件
+                if (!(ctrl is TextBox || ctrl is ComboBox || ctrl is DataGridView || ctrl is Button))
+                {
+                    ctrl.MouseDown += (s, e) => {
+                        if (targetFocusControl.CanFocus) targetFocusControl.Focus();
+                    };
+                }
+                // 递归处理子容器
+                if (ctrl.HasChildren) BindFocusTransfer(ctrl, targetFocusControl);
+            }
+        }
+
+        /// <summary>
+        /// 3. 自动根据内容最长项调整 ComboBox 下拉框宽度
+        /// </summary>
+        public static void AdaptDropDownWidth(ComboBox cb)
+        {
+            int maxWidth = cb.Width;
+            using (Graphics g = cb.CreateGraphics())
+            {
+                foreach (var item in cb.Items)
+                {
+                    int itemWidth = (int)g.MeasureString(item.ToString(), cb.Font).Width;
+                    if (itemWidth > maxWidth) maxWidth = itemWidth;
+                }
+            }
+            cb.DropDownWidth = maxWidth + 20; // 预留滚动条空间
+        }
+    }
+
+    public static class ThemeManager
+    {
+        public static bool IsDarkMode { get; private set; } = false;
+
+        // --- 1. 核心颜色定义 (私有) ---
+        // 黑暗模式
+        private static readonly Color Dark_Win = Color.FromArgb(25, 25, 25);
+        private static readonly Color Dark_Pnl = Color.FromArgb(40, 40, 40);
+        private static readonly Color Dark_Img = Color.FromArgb(20, 20, 20);
+        private static readonly Color Dark_Txt = Color.FromArgb(220, 220, 220);
+        private static readonly Color Dark_Act = Color.FromArgb(45, 90, 48);
+        private static readonly Color Dark_Bdr = Color.FromArgb(70, 70, 70);
+
+        // 白天模式
+        private static readonly Color Light_Win = SystemColors.Control;
+        private static readonly Color Light_Pnl = Color.PeachPuff;
+        private static readonly Color Light_Img = Color.SeaShell; // 你的 SeaShell
+        private static readonly Color Light_Txt = SystemColors.ControlText;
+        private static readonly Color Light_Act = Color.LightGreen;
+        private static readonly Color Light_Bdr = Color.FromArgb(210, 205, 195);
+
+        // --- 2. 对外统一接口 (利用三元表达式简化) ---
+        public static Color BackColor => IsDarkMode ? Dark_Win : Light_Win;
+        public static Color PanelColor => IsDarkMode ? Dark_Pnl : Light_Pnl;
+        public static Color PicViewBg => IsDarkMode ? Dark_Img : Light_Img;
+        public static Color TextColor => IsDarkMode ? Dark_Txt : Light_Txt;
+        public static Color AccentColor => IsDarkMode ? Dark_Act : Light_Act;
+        public static Color BorderColor => IsDarkMode ? Dark_Bdr : Light_Bdr;
+        // 输入激活状态：黑暗模式用深灰，白天用纯白
+        public static Color InputActiveBg => IsDarkMode ? Color.FromArgb(65, 65, 65) : Color.White;
+
+        // 输入闲置状态：黑暗模式用近黑，白天用你喜欢的 AntiqueWhite
+        public static Color InputIdleBg => IsDarkMode ? Color.FromArgb(35, 35, 35) : Color.AntiqueWhite;
+
+        // 对应的文字颜色
+        public static Color InputActiveText => IsDarkMode ? Color.White : Color.Black;
+        public static Color InputIdleText => Color.Gray;
+        /// <summary>
+        /// 切换主题的主入口
+        /// </summary>
+        public static void ToggleTheme(Form form) { IsDarkMode = !IsDarkMode; ApplyTheme(form); }
+
+        public static void ApplyTheme(Form form)
+        {
+            form.BackColor = BackColor;
+            form.ForeColor = TextColor;
+            ProcessControls(form.Controls);
+            SetTitleBarTheme(form.Handle, IsDarkMode);
+            form.Invalidate(true);
+        }
+
+        private static void ProcessControls(Control.ControlCollection controls)
+        {
+            foreach (Control ctrl in controls)
+            {
+                // 使用新版 C# 的模式匹配
+                switch (ctrl)
+                {
+                    case Panel p:
+                        if (p.Name == "LabelViewpanel"|| p.Name == "Textboxpanel") 
+                        {
+                            p.BackColor = Color.Orange;
+                        }
+                        else if(p.Name == "PicView")
+                        {
+                            p.BackColor = PicViewBg;
+                        }
+                        else
+                            p.BackColor = PanelColor;
+                        break;
+                    case Button btn:
+                        btn.FlatStyle = FlatStyle.Flat;
+                        btn.BackColor = IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+                        btn.FlatAppearance.BorderColor = IsDarkMode ?  BorderColor:Color.Tan; // 使用你定义的 BorderColor
+                        btn.FlatAppearance.BorderSize = 2;
+                        break;
+                    case DataGridView dgv:
+                        ApplyDgvTheme(dgv);
+                        break;
+                    case ToolStrip ts:
+                        ts.Renderer = new DarkThemeRenderer();
+                        ts.BackColor = BackColor;
+                        break;
+                    case TextBox tb:
+                        tb.BackColor = InputIdleBg;
+                        tb.ForeColor = InputIdleText;
+                        break;
+                    case ComboBox cb:
+                        cb.FlatStyle = FlatStyle.Flat;
+                        cb.BackColor = IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White;
+                        cb.ForeColor = IsDarkMode ? Color.White : Color.Black;
+                        break;
+                }
+
+                ctrl.ForeColor = TextColor;
+                if (ctrl.HasChildren) ProcessControls(ctrl.Controls);
+            }
+        }
+        public class DarkThemeRenderer : ToolStripProfessionalRenderer
+        {
+            public DarkThemeRenderer() : base(IsDarkMode ? (ProfessionalColorTable)new DarkColors() : new LightColors()) { }
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            { e.TextColor = TextColor; base.OnRenderItemText(e); }
+        }
+
+        // 定义黑暗模式下的具体颜色表
+        public class DarkColors : ProfessionalColorTable
+        {
+            public override Color MenuItemSelected => Color.FromArgb(80, 80, 80);        // 鼠标滑过背景
+            public override Color MenuItemSelectedGradientBegin => Color.FromArgb(80, 80, 80);
+            public override Color MenuItemSelectedGradientEnd => Color.FromArgb(80, 80, 80);
+            public override Color MenuItemBorder => Color.FromArgb(100, 100, 100);       // 菜单边框
+            public override Color MenuBorder => Color.FromArgb(40, 40, 40);             // 弹出菜单外框
+            public override Color ToolStripDropDownBackground => Color.FromArgb(45, 45, 45); // 下拉背景
+            public override Color ImageMarginGradientBegin => Color.FromArgb(45, 45, 45);   // 左侧图标栏
+            public override Color ImageMarginGradientMiddle => Color.FromArgb(45, 45, 45);
+            public override Color ImageMarginGradientEnd => Color.FromArgb(45, 45, 45);
+        }
+
+        public class LightColors : ProfessionalColorTable
+        {
+            public override Color MenuItemSelected => Color.FromArgb(230, 225, 215); // 接近 SeaShell 的深色
+            public override Color ToolStripDropDownBackground => Color.White;
+            public override Color MenuBorder => Color.FromArgb(210, 205, 195);
+            public override Color ImageMarginGradientBegin => Color.FromArgb(252, 251, 248); // 极淡的底色
+        }
+        private static void ApplyDgvTheme(DataGridView dgv)
+        {
+            dgv.BackgroundColor = BackColor;
+            dgv.GridColor = BorderColor;
+            dgv.DefaultCellStyle.BackColor = IsDarkMode ? Dark_Pnl:Color.White;
+            dgv.DefaultCellStyle.ForeColor = TextColor;
+            dgv.DefaultCellStyle.SelectionBackColor = Color.Orange;
+            dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
+
+            dgv.EnableHeadersVisualStyles = false;
+            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = IsDarkMode ? Color.FromArgb(55, 55, 55) : Color.FromArgb(235, 230, 220);
+            dgv.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextColor;
+            dgv.ColumnHeadersDefaultCellStyle.BackColor = IsDarkMode ? Color.FromArgb(55, 55, 55) : Color.FromArgb(235, 230, 220);
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor = TextColor;
+        }
+
+        // --- Windows API 标题栏处理 ---
+        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+        private static void SetTitleBarTheme(IntPtr handle, bool dark)
+        {
+            if (Environment.OSVersion.Version.Major >= 10)
+            {
+                int v = dark ? 1 : 0;
+                DwmSetWindowAttribute(handle, 20, ref v, sizeof(int));
+            }
+        }
+    }
+
 }
+

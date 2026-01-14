@@ -41,6 +41,9 @@
             OpenTranslation = new ToolStripMenuItem();
             SaveTranslation = new ToolStripMenuItem();
             SaveAsTranslation = new ToolStripMenuItem();
+            ModifyMenu = new ToolStripMenuItem();
+            ModifyGroup = new ToolStripMenuItem();
+            LabelTextFontsize = new ToolStripMenuItem();
             LabelView = new DataGridView();
             LabelIndex = new DataGridViewTextBoxColumn();
             LabelText = new DataGridViewTextBoxColumn();
@@ -56,24 +59,18 @@
             deleteLabelToolStripMenuItem = new ToolStripMenuItem();
             imageLabelBindingSource = new BindingSource(components);
             PicNameBindingSource = new BindingSource(components);
-            Tool = new ToolStrip();
-            StatusLabel = new ToolStripLabel();
-            LabelMode = new ToolStripButton();
-            TextReviewMode = new ToolStripButton();
-            OCRMode = new ToolStripButton();
-            OCRtoolStripLabel = new ToolStripLabel();
-            OCRComboBox = new ToolStripComboBox();
-            ImageReviewButton = new ToolStripButton();
             splitContainer1 = new SplitContainer();
+            Picpanel = new Panel();
             bottompanel = new Panel();
             PicNameLabel = new Label();
             PicName = new ComboBox();
             LPbutton = new Button();
             NPbutton = new Button();
             FittoViewbutton = new Button();
+            LabelViewpanel = new Panel();
             Parampanel = new Panel();
             Indexlabel = new Label();
-            Parampanel2 = new Panel();
+            Textboxpanel = new Panel();
             LabelTextBox = new TextBox();
             Parampanel1 = new Panel();
             Locationshowlabel = new Label();
@@ -88,21 +85,31 @@
             Remarklabel = new Label();
             TextReviewtoolTip = new ToolTip(components);
             hoverTimer = new System.Windows.Forms.Timer(components);
+            Toolpanel = new Panel();
+            DarkorWhiteMode = new Button();
+            StatusLabel = new Label();
+            ImageReviewButton = new Button();
+            OCRComboBox = new ComboBox();
+            OCRMode = new Button();
+            TextReviewMode = new Button();
+            LabelMode = new Button();
             ((System.ComponentModel.ISupportInitialize)PicView).BeginInit();
             Menu.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)LabelView).BeginInit();
             LabelViewMenuStrip.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)imageLabelBindingSource).BeginInit();
             ((System.ComponentModel.ISupportInitialize)PicNameBindingSource).BeginInit();
-            Tool.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
+            Picpanel.SuspendLayout();
             bottompanel.SuspendLayout();
+            LabelViewpanel.SuspendLayout();
             Parampanel.SuspendLayout();
-            Parampanel2.SuspendLayout();
+            Textboxpanel.SuspendLayout();
             Parampanel1.SuspendLayout();
+            Toolpanel.SuspendLayout();
             SuspendLayout();
             // 
             // PicView
@@ -112,7 +119,7 @@
             PicView.Dock = DockStyle.Fill;
             PicView.Location = new Point(0, 0);
             PicView.Name = "PicView";
-            PicView.Size = new Size(500, 482);
+            PicView.Size = new Size(500, 474);
             PicView.TabIndex = 0;
             PicView.TabStop = false;
             PicView.Paint += PicView_Paint;
@@ -123,7 +130,8 @@
             // 
             // Menu
             // 
-            Menu.Items.AddRange(new ToolStripItem[] { FileMenu });
+            Menu.BackColor = Color.White;
+            Menu.Items.AddRange(new ToolStripItem[] { FileMenu, ModifyMenu });
             Menu.Location = new Point(0, 0);
             Menu.Name = "Menu";
             Menu.Size = new Size(984, 25);
@@ -165,6 +173,27 @@
             SaveAsTranslation.Text = "另存为翻译";
             SaveAsTranslation.Click += SaveAsTranslation_Click;
             // 
+            // ModifyMenu
+            // 
+            ModifyMenu.DropDownItems.AddRange(new ToolStripItem[] { ModifyGroup, LabelTextFontsize });
+            ModifyMenu.Name = "ModifyMenu";
+            ModifyMenu.Size = new Size(44, 21);
+            ModifyMenu.Text = "修改";
+            // 
+            // ModifyGroup
+            // 
+            ModifyGroup.Name = "ModifyGroup";
+            ModifyGroup.Size = new Size(160, 22);
+            ModifyGroup.Text = "修改组别";
+            ModifyGroup.Click += ModifyGroup_Click;
+            // 
+            // LabelTextFontsize
+            // 
+            LabelTextFontsize.Name = "LabelTextFontsize";
+            LabelTextFontsize.Size = new Size(160, 22);
+            LabelTextFontsize.Text = "修改文本框字号";
+            LabelTextFontsize.Click += LabelTextFontsize_Click;
+            // 
             // LabelView
             // 
             LabelView.AllowUserToAddRows = false;
@@ -172,10 +201,12 @@
             LabelView.AllowUserToResizeRows = false;
             LabelView.AutoGenerateColumns = false;
             LabelView.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.DisplayedCells;
-            LabelView.BackgroundColor = SystemColors.Info;
+            LabelView.BackgroundColor = Color.PeachPuff;
+            LabelView.BorderStyle = BorderStyle.None;
+            LabelView.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
             dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dataGridViewCellStyle1.BackColor = SystemColors.Control;
-            dataGridViewCellStyle1.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            dataGridViewCellStyle1.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
             dataGridViewCellStyle1.ForeColor = SystemColors.WindowText;
             dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
             dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
@@ -186,22 +217,22 @@
             LabelView.DataSource = imageLabelBindingSource;
             dataGridViewCellStyle4.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle4.BackColor = SystemColors.Window;
-            dataGridViewCellStyle4.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            dataGridViewCellStyle4.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             dataGridViewCellStyle4.ForeColor = SystemColors.ControlText;
             dataGridViewCellStyle4.SelectionBackColor = Color.FromArgb(255, 192, 128);
-            dataGridViewCellStyle4.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle4.SelectionForeColor = SystemColors.ControlText;
             dataGridViewCellStyle4.WrapMode = DataGridViewTriState.True;
             LabelView.DefaultCellStyle = dataGridViewCellStyle4;
             LabelView.Dock = DockStyle.Fill;
-            LabelView.GridColor = SystemColors.Menu;
-            LabelView.Location = new Point(0, 0);
+            LabelView.GridColor = SystemColors.GrayText;
+            LabelView.Location = new Point(3, 3);
             LabelView.MultiSelect = false;
             LabelView.Name = "LabelView";
             LabelView.ReadOnly = true;
-            LabelView.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+            LabelView.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
             LabelView.RowHeadersVisible = false;
             LabelView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            LabelView.Size = new Size(480, 118);
+            LabelView.Size = new Size(464, 110);
             LabelView.TabIndex = 2;
             LabelView.CellMouseDown += LabelView_CellMouseClick;
             // 
@@ -211,11 +242,11 @@
             dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleCenter;
             LabelIndex.DefaultCellStyle = dataGridViewCellStyle2;
             LabelIndex.HeaderText = "序号";
-            LabelIndex.MinimumWidth = 80;
+            LabelIndex.MinimumWidth = 60;
             LabelIndex.Name = "LabelIndex";
             LabelIndex.ReadOnly = true;
             LabelIndex.SortMode = DataGridViewColumnSortMode.NotSortable;
-            LabelIndex.Width = 80;
+            LabelIndex.Width = 60;
             // 
             // LabelText
             // 
@@ -234,7 +265,7 @@
             LabelGroup.Name = "LabelGroup";
             LabelGroup.ReadOnly = true;
             LabelGroup.SortMode = DataGridViewColumnSortMode.NotSortable;
-            LabelGroup.Width = 44;
+            LabelGroup.Width = 60;
             // 
             // indexDataGridViewTextBoxColumn
             // 
@@ -297,7 +328,6 @@
             remarkDataGridViewTextBoxColumn.Name = "remarkDataGridViewTextBoxColumn";
             remarkDataGridViewTextBoxColumn.ReadOnly = true;
             remarkDataGridViewTextBoxColumn.Visible = false;
-            remarkDataGridViewTextBoxColumn.Width = 44;
             // 
             // LabelViewMenuStrip
             // 
@@ -324,110 +354,58 @@
             PicNameBindingSource.DataSource = typeof(ImageInfo);
             PicNameBindingSource.CurrentItemChanged += PicNameBindingSource_CurrentItemChanged;
             // 
-            // Tool
-            // 
-            Tool.AutoSize = false;
-            Tool.Items.AddRange(new ToolStripItem[] { StatusLabel, LabelMode, TextReviewMode, OCRMode, OCRtoolStripLabel, OCRComboBox, ImageReviewButton });
-            Tool.Location = new Point(0, 25);
-            Tool.Name = "Tool";
-            Tool.Size = new Size(984, 40);
-            Tool.TabIndex = 4;
-            Tool.Text = "toolStrip1";
-            // 
-            // StatusLabel
-            // 
-            StatusLabel.Alignment = ToolStripItemAlignment.Right;
-            StatusLabel.Name = "StatusLabel";
-            StatusLabel.Size = new Size(146, 37);
-            StatusLabel.Text = "sponsored by No-Hifuu";
-            // 
-            // LabelMode
-            // 
-            LabelMode.Image = (Image)resources.GetObject("LabelMode.Image");
-            LabelMode.ImageTransparentColor = Color.Magenta;
-            LabelMode.Name = "LabelMode";
-            LabelMode.Size = new Size(76, 37);
-            LabelMode.Text = "标记模式";
-            LabelMode.Click += LabelMode_Click;
-            // 
-            // TextReviewMode
-            // 
-            TextReviewMode.Image = LabelMinus.Properties.Resources.图标;
-            TextReviewMode.ImageTransparentColor = Color.Magenta;
-            TextReviewMode.Name = "TextReviewMode";
-            TextReviewMode.Size = new Size(76, 37);
-            TextReviewMode.Text = "文校模式";
-            TextReviewMode.Click += TextReviewMode_Click;
-            // 
-            // OCRMode
-            // 
-            OCRMode.Image = (Image)resources.GetObject("OCRMode.Image");
-            OCRMode.ImageTransparentColor = Color.Magenta;
-            OCRMode.Name = "OCRMode";
-            OCRMode.Size = new Size(76, 37);
-            OCRMode.Text = "识别模式";
-            OCRMode.Click += OCRMode_Click;
-            // 
-            // OCRtoolStripLabel
-            // 
-            OCRtoolStripLabel.Name = "OCRtoolStripLabel";
-            OCRtoolStripLabel.Size = new Size(68, 37);
-            OCRtoolStripLabel.Text = "识别网站：";
-            // 
-            // OCRComboBox
-            // 
-            OCRComboBox.Font = new Font("Microsoft YaHei UI", 11F);
-            OCRComboBox.Name = "OCRComboBox";
-            OCRComboBox.Overflow = ToolStripItemOverflow.Never;
-            OCRComboBox.Size = new Size(240, 40);
-            // 
-            // ImageReviewButton
-            // 
-            ImageReviewButton.Image = (Image)resources.GetObject("ImageReviewButton.Image");
-            ImageReviewButton.ImageTransparentColor = Color.Magenta;
-            ImageReviewButton.Name = "ImageReviewButton";
-            ImageReviewButton.Size = new Size(76, 37);
-            ImageReviewButton.Text = "图校模式";
-            ImageReviewButton.Click += ImageReviewButton_Click;
-            // 
             // splitContainer1
             // 
+            splitContainer1.BackColor = Color.PeachPuff;
             splitContainer1.Dock = DockStyle.Fill;
-            splitContainer1.Location = new Point(0, 65);
+            splitContainer1.Location = new Point(0, 67);
             splitContainer1.Name = "splitContainer1";
             // 
             // splitContainer1.Panel1
             // 
-            splitContainer1.Panel1.Controls.Add(PicView);
+            splitContainer1.Panel1.Controls.Add(Picpanel);
             splitContainer1.Panel1.Controls.Add(bottompanel);
             // 
             // splitContainer1.Panel2
             // 
-            splitContainer1.Panel2.Controls.Add(LabelView);
+            splitContainer1.Panel2.BackColor = Color.PeachPuff;
+            splitContainer1.Panel2.Controls.Add(LabelViewpanel);
             splitContainer1.Panel2.Controls.Add(Parampanel);
             splitContainer1.Panel2.Margin = new Padding(3);
-            splitContainer1.Size = new Size(984, 518);
+            splitContainer1.Panel2.Padding = new Padding(0, 0, 10, 0);
+            splitContainer1.Size = new Size(984, 516);
             splitContainer1.SplitterDistance = 500;
             splitContainer1.TabIndex = 3;
             // 
+            // Picpanel
+            // 
+            Picpanel.Controls.Add(PicView);
+            Picpanel.Dock = DockStyle.Fill;
+            Picpanel.Location = new Point(0, 0);
+            Picpanel.Name = "Picpanel";
+            Picpanel.Size = new Size(500, 474);
+            Picpanel.TabIndex = 3;
+            // 
             // bottompanel
             // 
+            bottompanel.BackColor = Color.PeachPuff;
             bottompanel.Controls.Add(PicNameLabel);
             bottompanel.Controls.Add(PicName);
             bottompanel.Controls.Add(LPbutton);
             bottompanel.Controls.Add(NPbutton);
             bottompanel.Controls.Add(FittoViewbutton);
             bottompanel.Dock = DockStyle.Bottom;
-            bottompanel.Location = new Point(0, 482);
+            bottompanel.Location = new Point(0, 474);
             bottompanel.Name = "bottompanel";
-            bottompanel.Size = new Size(500, 36);
+            bottompanel.Padding = new Padding(3);
+            bottompanel.Size = new Size(500, 42);
             bottompanel.TabIndex = 2;
             // 
             // PicNameLabel
             // 
             PicNameLabel.Anchor = AnchorStyles.Right;
             PicNameLabel.AutoSize = true;
-            PicNameLabel.Location = new Point(148, 10);
+            PicNameLabel.Location = new Point(145, 13);
             PicNameLabel.Name = "PicNameLabel";
             PicNameLabel.Size = new Size(35, 17);
             PicNameLabel.TabIndex = 7;
@@ -441,7 +419,7 @@
             PicName.DisplayMember = "ImageName";
             PicName.Font = new Font("Microsoft YaHei UI", 12F);
             PicName.FormattingEnabled = true;
-            PicName.Location = new Point(189, 3);
+            PicName.Location = new Point(184, 6);
             PicName.Name = "PicName";
             PicName.Size = new Size(161, 29);
             PicName.TabIndex = 6;
@@ -449,7 +427,7 @@
             // LPbutton
             // 
             LPbutton.Dock = DockStyle.Right;
-            LPbutton.Location = new Point(350, 0);
+            LPbutton.Location = new Point(347, 3);
             LPbutton.Name = "LPbutton";
             LPbutton.Size = new Size(75, 36);
             LPbutton.TabIndex = 4;
@@ -460,7 +438,7 @@
             // NPbutton
             // 
             NPbutton.Dock = DockStyle.Right;
-            NPbutton.Location = new Point(425, 0);
+            NPbutton.Location = new Point(422, 3);
             NPbutton.Name = "NPbutton";
             NPbutton.Size = new Size(75, 36);
             NPbutton.TabIndex = 3;
@@ -471,7 +449,7 @@
             // FittoViewbutton
             // 
             FittoViewbutton.Dock = DockStyle.Left;
-            FittoViewbutton.Location = new Point(0, 0);
+            FittoViewbutton.Location = new Point(3, 3);
             FittoViewbutton.Name = "FittoViewbutton";
             FittoViewbutton.Size = new Size(75, 36);
             FittoViewbutton.TabIndex = 0;
@@ -479,16 +457,28 @@
             FittoViewbutton.UseVisualStyleBackColor = true;
             FittoViewbutton.Click += FittoView;
             // 
+            // LabelViewpanel
+            // 
+            LabelViewpanel.BackColor = Color.Orange;
+            LabelViewpanel.Controls.Add(LabelView);
+            LabelViewpanel.Dock = DockStyle.Fill;
+            LabelViewpanel.Location = new Point(0, 0);
+            LabelViewpanel.Name = "LabelViewpanel";
+            LabelViewpanel.Padding = new Padding(3);
+            LabelViewpanel.Size = new Size(470, 116);
+            LabelViewpanel.TabIndex = 5;
+            // 
             // Parampanel
             // 
+            Parampanel.BackColor = Color.PeachPuff;
             Parampanel.Controls.Add(Indexlabel);
-            Parampanel.Controls.Add(Parampanel2);
+            Parampanel.Controls.Add(Textboxpanel);
             Parampanel.Controls.Add(Parampanel1);
             Parampanel.Dock = DockStyle.Bottom;
-            Parampanel.Location = new Point(0, 118);
+            Parampanel.Location = new Point(0, 116);
             Parampanel.Name = "Parampanel";
-            Parampanel.Padding = new Padding(0, 30, 10, 10);
-            Parampanel.Size = new Size(480, 400);
+            Parampanel.Padding = new Padding(0, 30, 0, 10);
+            Parampanel.Size = new Size(470, 400);
             Parampanel.TabIndex = 4;
             // 
             // Indexlabel
@@ -503,31 +493,32 @@
             Indexlabel.TextAlign = ContentAlignment.MiddleCenter;
             Indexlabel.Paint += Indexlabel_Paint;
             // 
-            // Parampanel2
+            // Textboxpanel
             // 
-            Parampanel2.Controls.Add(LabelTextBox);
-            Parampanel2.Dock = DockStyle.Fill;
-            Parampanel2.Location = new Point(0, 30);
-            Parampanel2.Name = "Parampanel2";
-            Parampanel2.Padding = new Padding(0, 3, 3, 3);
-            Parampanel2.Size = new Size(309, 360);
-            Parampanel2.TabIndex = 9;
+            Textboxpanel.BackColor = Color.Orange;
+            Textboxpanel.Controls.Add(LabelTextBox);
+            Textboxpanel.Dock = DockStyle.Fill;
+            Textboxpanel.Location = new Point(0, 30);
+            Textboxpanel.Name = "Textboxpanel";
+            Textboxpanel.Padding = new Padding(3);
+            Textboxpanel.Size = new Size(309, 360);
+            Textboxpanel.TabIndex = 9;
             // 
             // LabelTextBox
             // 
             LabelTextBox.BackColor = Color.AntiqueWhite;
-            LabelTextBox.BorderStyle = BorderStyle.FixedSingle;
+            LabelTextBox.BorderStyle = BorderStyle.None;
             LabelTextBox.DataBindings.Add(new Binding("Text", imageLabelBindingSource, "Text", true, DataSourceUpdateMode.OnPropertyChanged));
             LabelTextBox.Dock = DockStyle.Fill;
             LabelTextBox.Font = new Font("Microsoft YaHei UI", 12F);
             LabelTextBox.ForeColor = Color.Gray;
-            LabelTextBox.Location = new Point(0, 3);
+            LabelTextBox.Location = new Point(3, 3);
             LabelTextBox.Multiline = true;
             LabelTextBox.Name = "LabelTextBox";
-            LabelTextBox.Size = new Size(306, 354);
+            LabelTextBox.Size = new Size(303, 354);
             LabelTextBox.TabIndex = 3;
-            LabelTextBox.Enter += TextBox_Enter;
-            LabelTextBox.Leave += TextBox_Leave;
+            LabelTextBox.Enter += TextBox_FocusChanged;
+            LabelTextBox.Leave += TextBox_FocusChanged;
             // 
             // Parampanel1
             // 
@@ -652,8 +643,8 @@
             RemarktextBox.Name = "RemarktextBox";
             RemarktextBox.Size = new Size(155, 84);
             RemarktextBox.TabIndex = 7;
-            RemarktextBox.Enter += RemarktextBox_Enter;
-            RemarktextBox.Leave += RemarktextBox_Leave;
+            RemarktextBox.Enter += TextBox_FocusChanged;
+            RemarktextBox.Leave += TextBox_FocusChanged;
             // 
             // Remarklabel
             // 
@@ -680,13 +671,104 @@
             hoverTimer.Interval = 500;
             hoverTimer.Tick += hoverTimer_Tick;
             // 
+            // Toolpanel
+            // 
+            Toolpanel.Controls.Add(DarkorWhiteMode);
+            Toolpanel.Controls.Add(StatusLabel);
+            Toolpanel.Controls.Add(ImageReviewButton);
+            Toolpanel.Controls.Add(OCRComboBox);
+            Toolpanel.Controls.Add(OCRMode);
+            Toolpanel.Controls.Add(TextReviewMode);
+            Toolpanel.Controls.Add(LabelMode);
+            Toolpanel.Dock = DockStyle.Top;
+            Toolpanel.Location = new Point(0, 25);
+            Toolpanel.Name = "Toolpanel";
+            Toolpanel.Padding = new Padding(3);
+            Toolpanel.Size = new Size(984, 42);
+            Toolpanel.TabIndex = 5;
+            // 
+            // DarkorWhiteMode
+            // 
+            DarkorWhiteMode.Dock = DockStyle.Right;
+            DarkorWhiteMode.Location = new Point(760, 3);
+            DarkorWhiteMode.Name = "DarkorWhiteMode";
+            DarkorWhiteMode.Size = new Size(75, 36);
+            DarkorWhiteMode.TabIndex = 7;
+            DarkorWhiteMode.Text = "黑白显示";
+            DarkorWhiteMode.UseVisualStyleBackColor = true;
+            DarkorWhiteMode.Click += DarkorWhiteMode_Click;
+            // 
+            // StatusLabel
+            // 
+            StatusLabel.Dock = DockStyle.Right;
+            StatusLabel.Location = new Point(835, 3);
+            StatusLabel.Name = "StatusLabel";
+            StatusLabel.Size = new Size(146, 36);
+            StatusLabel.TabIndex = 6;
+            StatusLabel.Text = "sponsored by No-Hifuu";
+            StatusLabel.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // ImageReviewButton
+            // 
+            ImageReviewButton.Anchor = AnchorStyles.Left;
+            ImageReviewButton.Location = new Point(442, 6);
+            ImageReviewButton.Name = "ImageReviewButton";
+            ImageReviewButton.Size = new Size(75, 33);
+            ImageReviewButton.TabIndex = 5;
+            ImageReviewButton.Text = "图校模式";
+            ImageReviewButton.UseVisualStyleBackColor = true;
+            ImageReviewButton.Click += ImageReviewButton_Click;
+            // 
+            // OCRComboBox
+            // 
+            OCRComboBox.Anchor = AnchorStyles.Left;
+            OCRComboBox.Font = new Font("Microsoft YaHei UI", 10F);
+            OCRComboBox.FormattingEnabled = true;
+            OCRComboBox.Location = new Point(234, 9);
+            OCRComboBox.Name = "OCRComboBox";
+            OCRComboBox.Size = new Size(202, 27);
+            OCRComboBox.TabIndex = 4;
+            // 
+            // OCRMode
+            // 
+            OCRMode.Dock = DockStyle.Left;
+            OCRMode.Location = new Point(153, 3);
+            OCRMode.Name = "OCRMode";
+            OCRMode.Size = new Size(75, 36);
+            OCRMode.TabIndex = 2;
+            OCRMode.Text = "识别模式";
+            OCRMode.UseVisualStyleBackColor = true;
+            OCRMode.Click += OCRMode_Click;
+            // 
+            // TextReviewMode
+            // 
+            TextReviewMode.Dock = DockStyle.Left;
+            TextReviewMode.Location = new Point(78, 3);
+            TextReviewMode.Name = "TextReviewMode";
+            TextReviewMode.Size = new Size(75, 36);
+            TextReviewMode.TabIndex = 1;
+            TextReviewMode.Text = "文校模式";
+            TextReviewMode.UseVisualStyleBackColor = true;
+            TextReviewMode.Click += TextReviewMode_Click;
+            // 
+            // LabelMode
+            // 
+            LabelMode.Dock = DockStyle.Left;
+            LabelMode.Location = new Point(3, 3);
+            LabelMode.Name = "LabelMode";
+            LabelMode.Size = new Size(75, 36);
+            LabelMode.TabIndex = 0;
+            LabelMode.Text = "标记模式";
+            LabelMode.UseVisualStyleBackColor = true;
+            LabelMode.Click += LabelMode_Click;
+            // 
             // LabelMinusForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(984, 583);
             Controls.Add(splitContainer1);
-            Controls.Add(Tool);
+            Controls.Add(Toolpanel);
             Controls.Add(Menu);
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
             Icon = (Icon)resources.GetObject("$this.Icon");
@@ -696,7 +778,6 @@
             FormClosing += LabelMinusForm_FormClosing;
             FormClosed += LabelMinusForm_FormClosed;
             Load += LabelMinus_Load;
-            KeyDown += LabelMinusForm_KeyDown;
             ((System.ComponentModel.ISupportInitialize)PicView).EndInit();
             Menu.ResumeLayout(false);
             Menu.PerformLayout();
@@ -704,19 +785,20 @@
             LabelViewMenuStrip.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)imageLabelBindingSource).EndInit();
             ((System.ComponentModel.ISupportInitialize)PicNameBindingSource).EndInit();
-            Tool.ResumeLayout(false);
-            Tool.PerformLayout();
             splitContainer1.Panel1.ResumeLayout(false);
             splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
             splitContainer1.ResumeLayout(false);
+            Picpanel.ResumeLayout(false);
             bottompanel.ResumeLayout(false);
             bottompanel.PerformLayout();
+            LabelViewpanel.ResumeLayout(false);
             Parampanel.ResumeLayout(false);
-            Parampanel2.ResumeLayout(false);
-            Parampanel2.PerformLayout();
+            Textboxpanel.ResumeLayout(false);
+            Textboxpanel.PerformLayout();
             Parampanel1.ResumeLayout(false);
             Parampanel1.PerformLayout();
+            Toolpanel.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -730,13 +812,13 @@
         private ToolStripMenuItem NewTranslation;
         private ToolStripMenuItem OpenTranslation;
         private ToolStripMenuItem SaveTranslation;
+        private ToolStripMenuItem SaveAsTranslation;
         private DataGridView LabelView;
         private SplitContainer splitContainer1;
         private ContextMenuStrip LabelViewMenuStrip;
         private ToolStripMenuItem deleteLabelToolStripMenuItem;
         private ToolStrip toolStrip1;
         private BindingSource imageLabelBindingSource;
-        private ToolStripButton FittoViewButton;
         private Panel Parampanel;
         private Label Fontlabel;
         private ComboBox FontstylecomboBox;
@@ -747,19 +829,8 @@
         private Label Remarklabel;
         private TextBox RemarktextBox;
         private Panel Parampanel1;
-        private ToolStripLabel PicNametoolStripLabel;
-        private ToolStripMenuItem SaveAsTranslation;
-        private ToolStripLabel StatusLabel;
-        private ToolStripComboBox OCRComboBox;
-        private ToolStripButton OCRMode;
-        private ToolStripButton LabelMode;
-        private ToolStripLabel OCRtoolStripLabel;
-        private ToolStripButton NP;
-        private ToolStripButton LP;
         private ComboBox GroupcomboBox;
         private Label Grouplabel;
-        private ToolStripButton ImageReviewButton;
-        private ToolStripButton TextReviewMode;
         private ToolTip TextReviewtoolTip;
         private System.Windows.Forms.Timer hoverTimer;
         private BindingSource PicNameBindingSource;
@@ -769,6 +840,10 @@
         private Button LPbutton;
         private Button NPbutton;
         private Button FittoViewbutton;
+        private TextBox LabelTextBox;
+        private Panel Textboxpanel;
+        private Label Indexlabel;
+        private Panel LabelViewpanel;
         private DataGridViewTextBoxColumn LabelIndex;
         private DataGridViewTextBoxColumn LabelText;
         private DataGridViewTextBoxColumn LabelGroup;
@@ -779,8 +854,17 @@
         private DataGridViewTextBoxColumn fontSizeDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn fontFamilyDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn remarkDataGridViewTextBoxColumn;
-        private TextBox LabelTextBox;
-        private Panel Parampanel2;
-        private Label Indexlabel;
+        private Panel Toolpanel;
+        private Button TextReviewMode;
+        private Button LabelMode;
+        private Button DarkorWhiteMode;
+        private Label StatusLabel;
+        private Button ImageReviewButton;
+        private ComboBox OCRComboBox;
+        private Button OCRMode;
+        private ToolStripMenuItem ModifyMenu;
+        private ToolStripMenuItem ModifyGroup;
+        private ToolStripMenuItem LabelTextFontsize;
+        private Panel Picpanel;
     }
 }

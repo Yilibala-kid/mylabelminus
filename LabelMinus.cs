@@ -3,12 +3,15 @@ using LabelMinus.LabelMinus;
 using mylabel.Modules;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Windows.Forms;
 using System.Xml;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
+using Button = System.Windows.Forms.Button;
 using ComboBox = System.Windows.Forms.ComboBox;
 using Label = System.Windows.Forms.Label;
 using TextBox = System.Windows.Forms.TextBox;
@@ -48,19 +51,48 @@ namespace mylabel
         {
             InitializeComponent();
             SetMode("LabelMode");
-            this.ActiveControl = PicView;
-            BindFocusClick(this);
+
+            Modules.UIHelper.BindFocusTransfer(this, PicView);
         }
         #region 窗口加载关闭要做的
         private void LabelMinus_Load(object sender, EventArgs e)
         {
+            this.ActiveControl = PicView;
             // 启动清理
             ClearTempFolders();
 
             LoadSystemFonts(FontstylecomboBox);
             InitFontSizeComboBox();
             InitOCRComboBox();
+            BeautifyUI();
+            ThemeManager.ApplyTheme(this);
         }
+        private void LabelMinusForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // 如果你的 UndoManager 能判断当前状态是否与初始状态一致：
+            if (_undoManager.HasUnsavedChanges)
+            {
+                // 2. 弹出对话框询问用户
+                DialogResult result = MessageBox.Show(
+                    "您有未保存的更改，是否在退出前保存？",
+                    "保存确认",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    // 执行你的保存逻辑
+                    SaveTranslation_Click(null, null);
+                }
+                else if (result == DialogResult.Cancel)
+                {
+                    // 3. 关键：取消关闭动作，回到程序
+                    e.Cancel = true;
+                }
+                // 如果选 No，则不执行任何操作，窗体正常关闭
+            }
+        }
+
         private void LabelMinusForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             ClearTempFolders();
@@ -183,25 +215,6 @@ namespace mylabel
                 }
             }
         }
-
-        private void BindFocusClick(Control parent)
-        {
-            foreach (Control ctrl in parent.Controls)
-            {
-                // 如果不是输入类控件（TextBox, ComboBox, DataGridView 等）
-                if (!(ctrl is TextBox || ctrl is ComboBox || ctrl is DataGridView))
-                {
-                    ctrl.MouseDown += (s, e) =>
-                    {
-                        // 强制将焦点转移到父窗体或图片区域
-                        this.ActiveControl = PicView;
-                    };
-                }
-
-                // 递归处理嵌套控件
-                if (ctrl.HasChildren) BindFocusClick(ctrl);
-            }
-        }//点击其他地方退出编辑
         #endregion
 
 
@@ -232,7 +245,7 @@ namespace mylabel
             }
 
             // A. 基础环境设置
-            e.Graphics.Clear(Color.SeaShell);
+            e.Graphics.Clear(Modules.ThemeManager.PicViewBg);
             e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
 
             // B. 应用坐标变换
@@ -306,8 +319,22 @@ namespace mylabel
         }
         #endregion
 
-
         #region PicView事件
+        // 定义模式枚举，替代硬编码字符串
+        public enum ViewMode { Default, OCR, TextReview }
+
+        // 交互状态变量
+        private Point _lastMousePoint;
+        private bool _isDragging = false;
+        private bool _isSelecting = false;
+        private Rectangle _selectionRect;
+        private ImageLabel _draggingLabel = null;
+        private ImageLabel _hoveredLabel = null;
+
+        // 委托
+        private Action<MouseEventArgs> _onMouseDown;
+        private Action<MouseEventArgs> _onMouseMove;
+        private Action<MouseEventArgs> _onMouseUp;
         private Point mouseDownLocation;
         private Point _rightClickStartPoint;
         private bool isDragging = false;
@@ -333,10 +360,17 @@ namespace mylabel
             isPotentialClick = false;
             TextReviewtoolTip.Hide(PicView);
 
-            // 2. 重置按钮颜色
-            OCRMode.BackColor = SystemColors.Control;
-            TextReviewMode.BackColor = SystemColors.Control;
-            LabelMode.BackColor = SystemColors.Control;
+            // 2. 改激活按钮颜色
+            bool isDark = Modules.ThemeManager.IsDarkMode;
+            Color activeBg = Modules.ThemeManager.AccentColor;
+            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : SystemColors.Control;
+            Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
+            Color defaultFore = Modules.ThemeManager.TextColor;
+
+            // 3. 按钮视觉刷新
+            UpdateBtnStyle(OCRMode, mode == "OCR", activeBg, activeFore, defaultBg, defaultFore);
+            UpdateBtnStyle(TextReviewMode, mode == "TextReview", activeBg, activeFore, defaultBg, defaultFore);
+            UpdateBtnStyle(LabelMode, mode == "LabelMode" || mode == "Default", activeBg, activeFore, defaultBg, defaultFore);
 
             switch (mode)
             {
@@ -344,7 +378,6 @@ namespace mylabel
                     _currentMouseDownAction = DoOCRMouseDown;
                     _currentMouseMoveAction = DoOCRMouseMove;
                     _currentMouseUpAction = DoOCRMouseUp;
-                    OCRMode.BackColor = Color.LightGreen;
                     isOCRMode = true;
                     break;
 
@@ -352,7 +385,6 @@ namespace mylabel
                     _currentMouseDownAction = DoTextReviewMouseDown;
                     _currentMouseMoveAction = DoTextReviewMouseMove;
                     _currentMouseUpAction = DoTextReviewMouseUp;
-                    TextReviewMode.BackColor = Color.LightGreen;
                     isOCRMode = false;
                     break;
 
@@ -361,11 +393,15 @@ namespace mylabel
                     _currentMouseDownAction = DoDefaultMouseDown;
                     _currentMouseMoveAction = DoDefaultMouseMove;
                     _currentMouseUpAction = DoDefaultMouseUp;
-                    LabelMode.BackColor = Color.LightGreen;
                     isOCRMode = false;
                     break;
             }
             PicView.Invalidate();
+        }
+        private void UpdateBtnStyle(Button btn, bool isActive, Color activeBg, Color activeFore, Color defBg, Color defFore)
+        {
+            btn.BackColor = isActive ? activeBg : defBg;
+            btn.ForeColor = isActive ? activeFore : defFore;
         }
         private void PicView_MouseDown(object sender, MouseEventArgs e)
         {
@@ -378,31 +414,34 @@ namespace mylabel
                 _currentMouseDownAction?.Invoke(e);
         }
         #region down函数
-        // --- 模式 A: 默认按下逻辑 (打点与拖拽准备) ---
-        private void DoDefaultMouseDown(MouseEventArgs e)
+        private void DoDefaultMouseDown(MouseEventArgs e)// --- 模式 A: 默认按下逻辑 (打点与拖拽准备) ---
         {
-            if (e.Button == MouseButtons.Right)
-            {
-                _rightClickStartPoint = e.Location; // 记录起点
-            }
             mouseDownLocation = e.Location;
             isDragging = false;
             isPotentialClick = true;
         }
-
-        // --- 模式 B: OCR 按下逻辑 (开始拉框) ---
-        private void DoOCRMouseDown(MouseEventArgs e)
+        private void DoOCRMouseDown(MouseEventArgs e)// --- 模式 B: OCR 按下逻辑 (开始拉框) ---
         {
             isSelectingRect = true;
             ocrStartPoint = e.Location;
             ocrRect = new Rectangle(e.Location, new Size(0, 0));
         }
-
-        // --- 模式 C: 文校模式按下逻辑 (TextReview) ---
-        private void DoTextReviewMouseDown(MouseEventArgs e)
+        private void DoTextReviewMouseDown(MouseEventArgs e)// --- 模式 C: 文校模式按下逻辑 (TextReview) ---
         {
-            // 通常文校模式点击也需要支持拖拽（移动图片查看不同标记）所以直接复用默认逻辑即可
             DoDefaultMouseDown(e);
+            // 通常文校模式点击也需要支持拖拽（移动图片查看不同标记）所以直接复用默认逻辑即可
+            // 关键：如果当前悬停在一个标签上，则准备拖拽该标签
+            if (_pendingLabel != null)
+            {
+                _draggingLabel = _pendingLabel;
+                isDragging = true; // 情况A：点中标签，明确开启了拖拽
+                isPotentialClick = false;
+            }
+            else
+            {
+                // 没点中标签，清空之前的拖拽对象，准备拖动图片
+                _draggingLabel = null;
+            }
         }
         #endregion
         private void PicView_MouseMove(object sender, MouseEventArgs e)
@@ -448,14 +487,44 @@ namespace mylabel
         private ImageLabel _showingLabel = null; // 当前正在显示的标签对象
         private void DoTextReviewMouseMove(MouseEventArgs e)// --- 模式 C: 文校模式 (包含拖拽 + 悬停检测) ---
         {
-            // 1. 文校时通常也需要能拖图，所以先调用默认逻辑
-            DoDefaultMouseMove(e);
-
-            // 2. 如果正在拖拽，就不显示悬停提示，防止卡顿和闪烁
+            if (e.Button == MouseButtons.Left && isPotentialClick)
+            {
+                int dx = e.X - mouseDownLocation.X;
+                int dy = e.Y - mouseDownLocation.Y;
+                if (Math.Sqrt(dx * dx + dy * dy) > ClickThreshold)
+                {
+                    isDragging = true;
+                    isPotentialClick = false;
+                }
+            }
+            // 1. 如果正在拖拽
             if (isDragging)
             {
-                TextReviewtoolTip.Hide(PicView);
-                return;
+                if (_draggingLabel != null)
+                {
+                    // --- 模式：拖拽标签 ---
+                    PointF imgPt = ScreenToImage(e.Location);
+
+                    // 1. 先计算新坐标
+                    float newX = Math.Max(0, Math.Min(1, imgPt.X / image.Width));
+                    float newY = Math.Max(0, Math.Min(1, imgPt.Y / image.Height));
+
+                    // 2. 整体替换（这是处理 struct 的标准做法）
+                    // 假设 BoundingBox 是 struct，我们创建一个全新的结构体实例赋回去
+                    _draggingLabel.Position = new BoundingBox
+                    {
+                        X = newX,
+                        Y = newY
+                    };
+                    TextReviewtoolTip.Show(_draggingLabel.Text, PicView, e.X + 15, e.Y + 15);
+                    PicView.Invalidate();
+                }
+                else
+                {
+                    // --- 模式：拖拽图片 ---
+                    DoDefaultMouseMove(e);
+                }
+                return; // 正在拖拽时，不执行下方的悬停检测逻辑
             }
             if (CurrentInfo == null || image == null) return;
             // 3. 悬停检测逻辑
@@ -540,6 +609,7 @@ namespace mylabel
                 _currentMouseUpAction?.Invoke(e);
             }
             // 无论什么模式，松开鼠标后这些标志位都要重置
+            _draggingLabel = null;
             isDragging = false;
             isPotentialClick = false;
         }
@@ -810,6 +880,90 @@ namespace mylabel
                 }
             }
         }
+
+
+        private void ModifyGroup_Click(object sender, EventArgs e)
+        {
+            // 创建一个简单的右键菜单，让用户选择是“增加”还是“删除”
+            ContextMenuStrip menu = new ContextMenuStrip();
+
+            var addBtn = new ToolStripMenuItem("添加新分组");
+            addBtn.Click += (s, ev) =>
+            {
+                // 使用简单的输入框获取新组名
+                string newGroup = Microsoft.VisualBasic.Interaction.InputBox("请输入新分组名称：", "添加分组", "");
+                if (!string.IsNullOrWhiteSpace(newGroup))
+                {
+                    if (!GroupcomboBox.Items.Contains(newGroup))
+                    {
+                        GroupcomboBox.Items.Add(newGroup);
+                        GroupcomboBox.SelectedItem = newGroup; // 选中新加的
+                    }
+                    else
+                    {
+                        MessageBox.Show("该分组已存在");
+                    }
+                }
+            };
+
+            var delBtn = new ToolStripMenuItem("删除当前分组");
+            delBtn.Click += (s, ev) =>
+            {
+                if (GroupcomboBox.SelectedItem != null)
+                {
+                    string current = GroupcomboBox.SelectedItem.ToString();
+                    var result = MessageBox.Show($"确定要删除分组 [{current}] 吗？", "确认删除", MessageBoxButtons.YesNo);
+                    if (result == DialogResult.Yes)
+                    {
+                        GroupcomboBox.Items.Remove(current);
+                        if (GroupcomboBox.Items.Count > 0) GroupcomboBox.SelectedIndex = 0;
+                    }
+                }
+            };
+
+            menu.Items.Add(addBtn);
+            menu.Items.Add(delBtn);
+
+            // 在按钮下方弹出菜单
+            menu.Show(Control.MousePosition);
+        }
+
+        private void LabelTextFontsize_Click(object sender, EventArgs e)
+        {
+            ContextMenuStrip fontMenu = new ContextMenuStrip();
+
+            var increaseBtn = new ToolStripMenuItem("增大字号 (+2)");
+            increaseBtn.Click += (s, ev) => ChangeFontSize(2);
+
+            var decreaseBtn = new ToolStripMenuItem("缩小字号 (-2)");
+            decreaseBtn.Click += (s, ev) => ChangeFontSize(-2);
+
+            var resetBtn = new ToolStripMenuItem("重置默认");
+            resetBtn.Click += (s, ev) => {
+                LabelTextBox.Font = new Font(LabelTextBox.Font.FontFamily, 12f); // 假设 9 是默认值
+            };
+
+            fontMenu.Items.Add(increaseBtn);
+            fontMenu.Items.Add(decreaseBtn);
+            fontMenu.Items.Add(new ToolStripSeparator());
+            fontMenu.Items.Add(resetBtn);
+
+            fontMenu.Show(Control.MousePosition);
+        }
+        private void ChangeFontSize(float delta)
+        {
+            float currentSize = LabelTextBox.Font.Size;
+            float newSize = currentSize + delta;
+
+            // 限制范围，防止字体变负数或太大导致界面崩溃
+            if (newSize < 6) newSize = 6;
+            if (newSize > 48) newSize = 48;
+
+            Font newFont = new Font(LabelTextBox.Font.FontFamily, newSize);
+
+            // 同时应用到两个输入框，保持视觉统一
+            LabelTextBox.Font = newFont;
+        }// 通用的字体缩放方法
         #endregion
 
         #region LabelView相关
@@ -1078,258 +1232,31 @@ namespace mylabel
         }
         #endregion
 
-        #region 快捷键功能/相对独立的功能
-        private bool _isQDown = false;
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+
+
+        #region 界面美化(记得在Load中引用)
+        private int radius = 20;
+        private void BeautifyUI()
         {
-            // 拦截 Ctrl + Z
-            if (keyData == (Keys.Control | Keys.Z))
-            {
-                _undoManager.Undo();
-                imageLabelBindingSource.ResetCurrentItem();
-                PicView.Invalidate();
-                return true;
-            }
-
-            // 拦截 Ctrl + Y 
-            if (keyData == (Keys.Control | Keys.Y))
-            {
-                _undoManager.Redo();
-                imageLabelBindingSource.ResetCurrentItem();
-                PicView.Invalidate();
-                return true;
-            }
-            // 获取当前拥有焦点的最底层控件
-            Control focusedControl = GetDeepActiveControl(this);
-
-            // 只要是在输入类的控件里，就判定为“正在编辑”
-            bool isEditing = focusedControl is TextBox || focusedControl is ComboBox;
-
-            if (!isEditing)
-            {
-                switch (keyData)
-                {
-                    case Keys.A: // 上一张图片
-                        PicNameBindingSource.MovePrevious();
-                        return true;
-
-                    case Keys.D: // 下一张图片
-                        PicNameBindingSource.MoveNext();
-                        return true;
-
-                    case Keys.W: // 上一个标签
-                        imageLabelBindingSource.MovePrevious();
-                        return true;
-
-                    case Keys.S: // 下一个标签
-                        imageLabelBindingSource.MoveNext();
-                        return true;
-
-                    case Keys.R: // 适应屏幕
-                        FittoView(null, null);
-                        return true;
-
-                }
-            }
-            return base.ProcessCmdKey(ref msg, keyData);
+            //Parampanel2_Resize(null, null);
+            //LabelViewpanel_Resize(null, null);
         }
-        private Control GetDeepActiveControl(ContainerControl container)
+        private bool isDarkMode = false;
+
+        private void DarkorWhiteMode_Click(object sender, EventArgs e)
         {
-            Control active = container.ActiveControl;
-            if (active is ContainerControl nestedContainer)
-            {
-                return GetDeepActiveControl(nestedContainer);
-            }
-            return active;
-        }
-        private void LabelMinusForm_KeyDown(object sender, KeyEventArgs e)
-        {
-
-        }
-        private void ImageReviewButton_Click(object sender, EventArgs e)
-        {
-            // 检查是否已经打开，防止重复打开
-            Form existing = Application.OpenForms["ImageReviewForm"];
-            if (existing != null)
-            {
-                existing.Activate();
-                return;
-            }
-
-            // 创建并打开子窗口，把自己 (this) 传过去
-            ImageReviewForm reviewForm = new ImageReviewForm(this);
-            reviewForm.ShowDialog(); // 如果希望主窗口还能点，用 Show；如果不许点主窗口，用 ShowDialog
-        }
-        private void TextBox_Enter(object sender, EventArgs e)
-        {
-            // 进入输入状态：背景变亮，边框感增强
-            LabelTextBox.BackColor = Color.White;
-            LabelTextBox.ForeColor = Color.Black;
-        }
-
-        private void TextBox_Leave(object sender, EventArgs e)
-        {
-            // 退出输入状态：背景变淡灰色，暗示此时按键为快捷键
-            LabelTextBox.BackColor = Color.AntiqueWhite;
-            LabelTextBox.ForeColor = Color.Gray;
-        }
-        private void RemarktextBox_Enter(object sender, EventArgs e)
-        {
-            RemarktextBox.BackColor = Color.White;
-            RemarktextBox.ForeColor = Color.Black;
-        }
-        private void RemarktextBox_Leave(object sender, EventArgs e)
-        {
-            RemarktextBox.BackColor = Color.AntiqueWhite;
-            RemarktextBox.ForeColor = Color.Gray;
-        }
-        private void TextReviewtoolTip_Draw(object sender, DrawToolTipEventArgs e)
-        {
-            // 背景和边框
-            e.Graphics.FillRectangle(SystemBrushes.Info, e.Bounds);
-            e.DrawBorder();
-
-            using (Font myFont = new Font("微软雅黑", 12f, FontStyle.Regular))
-            {
-
-                // 定义绘图区域（稍微缩进一点，防止贴着边框）
-                RectangleF layoutRect = new RectangleF(
-                    e.Bounds.X + 5,
-                    e.Bounds.Y + 5,
-                    e.Bounds.Width - 10,
-                    e.Bounds.Height - 10);
-
-                // 使用 StringFormat 来控制换行
-                using (StringFormat sf = new StringFormat())
-                {
-                    sf.Alignment = StringAlignment.Near;      // 左对齐
-                    sf.LineAlignment = StringAlignment.Near;  // 顶对齐
-                    sf.FormatFlags = StringFormatFlags.LineLimit; // 完整显示行，不截断半行
-
-                    e.Graphics.DrawString(e.ToolTipText, myFont, Brushes.Black, layoutRect, sf);
-                }
-            }
-        }
-        private void TextReviewtoolTip_Popup(object sender, PopupEventArgs e)
-        {
-            using (Font myFont = new Font("微软雅黑", 12f, FontStyle.Regular))
-            {
-                string text = TextReviewtoolTip.GetToolTip(e.AssociatedControl);
-                int maxWidth = 400; // 设置你希望的最大宽度
-
-                // 使用 WordBreak 标记来计算换行后的尺寸
-                Size textSize = TextRenderer.MeasureText(
-                    text,
-                    myFont,
-                    new Size(maxWidth, 0),
-                    TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
-
-                e.ToolTipSize = new Size(textSize.Width + 15, textSize.Height + 15);
-            }
-        }
-        private void FittoView(object sender, EventArgs e)
-        {
-            if (image == null) return;
-
-            // 1. PictureBox 的可用绘制区域
-            float viewW = PicView.ClientSize.Width;
-            float viewH = PicView.ClientSize.Height;
-
-            // 2. 图片原始尺寸
-            float imgW = image.Width;
-            float imgH = image.Height;
-
-            // 3. 计算等比缩放（保证完整显示）
-            float scaleX = viewW / imgW;
-            float scaleY = viewH / imgH;
-            scale = Math.Min(scaleX, scaleY);
-
-            // 4. 计算居中偏移
-            float drawW = imgW * scale;
-            float drawH = imgH * scale;
-
-            offset.X = (viewW - drawW) / 2f;
-            offset.Y = (viewH - drawH) / 2f;
-
-            // 5. 重绘
+            // 一键切换
+            ThemeManager.ToggleTheme(this);
+            // 关键：重新调用一次 SetMode，刷新当前处于激活状态按钮的颜色
+            if (_currentMouseDownAction == DoOCRMouseDown) SetMode("OCR");
+            else if (_currentMouseDownAction == DoTextReviewMouseDown) SetMode("TextReview");
+            else SetMode("LabelMode");
+            TextBox_FocusChanged(LabelTextBox, null); TextBox_FocusChanged(RemarktextBox, null);
             PicView.Invalidate();
-        }
-        private void LP_Click(object sender, EventArgs e)
-        {
-            // 上一张 (Last Picture)
-            if (PicName.Items.Count > 0)
-            {
-                // 如果当前不是第一张，索引减 1；如果是第一张，则跳到最后一张（循环模式）
-                int newIndex = PicName.SelectedIndex - 1;
-
-                if (newIndex < 0)
-                {
-                    newIndex = PicName.Items.Count - 1; // 循环到最后
-                }
-
-                PicName.SelectedIndex = newIndex;
-            }
-        }
-        private void NP_Click(object sender, EventArgs e)
-        {
-            // 下一张 (Next Picture)
-            if (PicName.Items.Count > 0)
-            {
-                // 如果当前不是最后一张，索引加 1；如果是最后一张，则跳到第一张（循环模式）
-                int newIndex = PicName.SelectedIndex + 1;
-
-                if (newIndex >= PicName.Items.Count)
-                {
-                    newIndex = 0; // 循环到开头
-                }
-
-                PicName.SelectedIndex = newIndex;
-            }
-        }
-        private void Indexlabel_Paint(object sender, PaintEventArgs e)
-        {
-            Label lbl = (Label)sender;
-
-            // 1. 定义画笔颜色和粗细
-            using (Pen dashedPen = new Pen(Color.DimGray, 1))
-            {
-                // 2. 设置为虚线样式
-                dashedPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-
-                // 3. 计算边框范围（稍微收缩 1 像素，避免贴边看不清）
-                Rectangle rect = new Rectangle(0, 0, lbl.Width - 1, lbl.Height - 1);
-
-                // 4. 执行绘制
-                e.Graphics.DrawRectangle(dashedPen, rect);
-            }
         }
         #endregion
 
 
-        private void LabelMinusForm_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            // 如果你的 UndoManager 能判断当前状态是否与初始状态一致：
-            if (_undoManager.HasUnsavedChanges)
-            {
-                // 2. 弹出对话框询问用户
-                DialogResult result = MessageBox.Show(
-                    "您有未保存的更改，是否在退出前保存？",
-                    "保存确认",
-                    MessageBoxButtons.YesNoCancel,
-                    MessageBoxIcon.Question);
-
-                if (result == DialogResult.Yes)
-                {
-                    // 执行你的保存逻辑
-                    SaveTranslation_Click(null, null);
-                }
-                else if (result == DialogResult.Cancel)
-                {
-                    // 3. 关键：取消关闭动作，回到程序
-                    e.Cancel = true;
-                }
-                // 如果选 No，则不执行任何操作，窗体正常关闭
-            }
-        }
     }
+
 }

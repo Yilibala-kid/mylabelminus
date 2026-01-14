@@ -118,8 +118,10 @@ public class ImageLabel : ViewModelBase
         get => _position.X;
         set
         {
-            if (_position.X == value) return;
-            _position = _position with { X = value };
+            float clampedValue = Math.Clamp(value, 0, 1);
+            if (_position.X == clampedValue) return;
+
+            _position = _position with { X = clampedValue };
             OnPropertyChanged(); // 仅通知 X 改变
             OnPropertyChanged(nameof(Position)); // 通知整体改变
         }
@@ -131,8 +133,10 @@ public class ImageLabel : ViewModelBase
         get => _position.Y;
         set
         {
-            if (_position.Y == value) return;
-            _position = _position with { Y = value };
+            float clampedValue = Math.Clamp(value, 0, 1);
+            if (_position.Y == clampedValue) return;
+
+            _position = _position with { Y = clampedValue };
             OnPropertyChanged();
             OnPropertyChanged(nameof(Position));
         }
@@ -170,8 +174,8 @@ public class ImageLabel : ViewModelBase
 
 public struct BoundingBox
 {
-    public float X { get; init; }
-    public float Y { get; init; }
+    public float X { get; set; }
+    public float Y { get; set; }
     public float Width { get; init; }
     public float Height { get; init; }
 
