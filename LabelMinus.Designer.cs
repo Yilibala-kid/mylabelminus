@@ -228,7 +228,6 @@
             LabelView.Location = new Point(3, 3);
             LabelView.MultiSelect = false;
             LabelView.Name = "LabelView";
-            LabelView.ReadOnly = true;
             LabelView.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
             LabelView.RowHeadersVisible = false;
             LabelView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -254,7 +253,6 @@
             LabelText.DataPropertyName = "Text";
             LabelText.HeaderText = "文本";
             LabelText.Name = "LabelText";
-            LabelText.ReadOnly = true;
             // 
             // LabelGroup
             // 
@@ -263,7 +261,6 @@
             LabelGroup.DefaultCellStyle = dataGridViewCellStyle3;
             LabelGroup.HeaderText = "组别";
             LabelGroup.Name = "LabelGroup";
-            LabelGroup.ReadOnly = true;
             LabelGroup.SortMode = DataGridViewColumnSortMode.NotSortable;
             LabelGroup.Width = 60;
             // 
@@ -281,7 +278,6 @@
             textDataGridViewTextBoxColumn.DataPropertyName = "Text";
             textDataGridViewTextBoxColumn.HeaderText = "文本内容";
             textDataGridViewTextBoxColumn.Name = "textDataGridViewTextBoxColumn";
-            textDataGridViewTextBoxColumn.ReadOnly = true;
             textDataGridViewTextBoxColumn.Visible = false;
             textDataGridViewTextBoxColumn.Width = 44;
             // 
@@ -290,7 +286,6 @@
             groupDataGridViewTextBoxColumn.DataPropertyName = "Group";
             groupDataGridViewTextBoxColumn.HeaderText = "分组";
             groupDataGridViewTextBoxColumn.Name = "groupDataGridViewTextBoxColumn";
-            groupDataGridViewTextBoxColumn.ReadOnly = true;
             groupDataGridViewTextBoxColumn.Visible = false;
             groupDataGridViewTextBoxColumn.Width = 45;
             // 
@@ -299,7 +294,6 @@
             positionDataGridViewTextBoxColumn.DataPropertyName = "Position";
             positionDataGridViewTextBoxColumn.HeaderText = "位置";
             positionDataGridViewTextBoxColumn.Name = "positionDataGridViewTextBoxColumn";
-            positionDataGridViewTextBoxColumn.ReadOnly = true;
             positionDataGridViewTextBoxColumn.Visible = false;
             positionDataGridViewTextBoxColumn.Width = 44;
             // 
@@ -308,7 +302,6 @@
             fontSizeDataGridViewTextBoxColumn.DataPropertyName = "FontSize";
             fontSizeDataGridViewTextBoxColumn.HeaderText = "字号";
             fontSizeDataGridViewTextBoxColumn.Name = "fontSizeDataGridViewTextBoxColumn";
-            fontSizeDataGridViewTextBoxColumn.ReadOnly = true;
             fontSizeDataGridViewTextBoxColumn.Visible = false;
             fontSizeDataGridViewTextBoxColumn.Width = 44;
             // 
@@ -317,7 +310,6 @@
             fontFamilyDataGridViewTextBoxColumn.DataPropertyName = "FontFamily";
             fontFamilyDataGridViewTextBoxColumn.HeaderText = "字体";
             fontFamilyDataGridViewTextBoxColumn.Name = "fontFamilyDataGridViewTextBoxColumn";
-            fontFamilyDataGridViewTextBoxColumn.ReadOnly = true;
             fontFamilyDataGridViewTextBoxColumn.Visible = false;
             fontFamilyDataGridViewTextBoxColumn.Width = 44;
             // 
@@ -326,7 +318,6 @@
             remarkDataGridViewTextBoxColumn.DataPropertyName = "Remark";
             remarkDataGridViewTextBoxColumn.HeaderText = "备注";
             remarkDataGridViewTextBoxColumn.Name = "remarkDataGridViewTextBoxColumn";
-            remarkDataGridViewTextBoxColumn.ReadOnly = true;
             remarkDataGridViewTextBoxColumn.Visible = false;
             // 
             // LabelViewMenuStrip

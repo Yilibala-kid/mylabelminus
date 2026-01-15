@@ -50,7 +50,7 @@ namespace mylabel
         public LabelMinusForm()
         {
             InitializeComponent();
-            SetMode("LabelMode");
+            
 
             Modules.UIHelper.BindFocusTransfer(this, PicView);
         }
@@ -66,6 +66,7 @@ namespace mylabel
             InitOCRComboBox();
             BeautifyUI();
             ThemeManager.ApplyTheme(this);
+            SetMode("LabelMode");
         }
         private void LabelMinusForm_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -261,7 +262,7 @@ namespace mylabel
             // D. 画标注点
             // 获取图片的实际 DPI（若图片没设置，默认 96）
             // PS 标准换算：1 point = (DPI / 72) pixels
-            bool onlyShowIndex = (_currentMouseDownAction == DoTextReviewMouseDown);
+            bool onlyShowIndex = (_currentDownAction == DoTextReviewMouseDown);
             float dpiScale = image.HorizontalResolution / 72f;
 
             // 2. 只有都不为空时才绘制
@@ -278,22 +279,44 @@ namespace mylabel
                 );
             }
             // --- OCR 模式独有层 ---
-            if (_currentMouseDownAction == DoOCRMouseDown && isSelectingRect)
+            if (_currentDownAction == DoOCRMouseDown)
             {
-                e.Graphics.ResetTransform(); // 重置坐标系
+                e.Graphics.ResetTransform();
+                // 在左上角画个小标识，提醒用户正在文校模式
+                e.Graphics.DrawString("● 正在截图！！", this.Font, Brushes.Green, 10, 10);
 
-                using (Brush overlay = new SolidBrush(Color.FromArgb(100, 0, 0, 0)))
-                    e.Graphics.FillRectangle(overlay, PicView.ClientRectangle);
+            }
+            if (_currentDownAction == DoOCRMouseDown && isSelectingRect)
+            {
+                // 1. 暂时重置坐标系到屏幕坐标
+                e.Graphics.ResetTransform();
 
-                using (Pen p = new Pen(Color.Red, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+                // 2. 创建遮罩层（挖洞）
+                using (Region maskRegion = new Region(PicView.ClientRectangle))
+                {
+                    // 关键点：从 Region 中减去当前的截图矩形，形成一个“带洞的蒙版”
+                    maskRegion.Exclude(ocrRect);
+
+                    using (Brush overlay = new SolidBrush(Color.FromArgb(120, 0, 0, 0))) // 稍微加深蒙版
+                    {
+                        e.Graphics.FillRegion(overlay, maskRegion);
+                    }
+                }
+
+                // 3. 画截图框的虚线边框
+                using (Pen p = new Pen(Color.Cyan, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+                {
                     e.Graphics.DrawRectangle(p, ocrRect);
+                }
 
-                e.Graphics.DrawString($"{ocrRect.Width} x {ocrRect.Height}",
-                    this.Font, Brushes.Red, ocrRect.X, ocrRect.Y - 15);
+                // 4. 画尺寸信息（增加背景，防止在深色图片上看不清）
+                string sizeText = $"{ocrRect.Width} x {ocrRect.Height}";
+                e.Graphics.FillRectangle(Brushes.Black, ocrRect.X, ocrRect.Y - 20, 70, 18);
+                e.Graphics.DrawString(sizeText, this.Font, Brushes.White, ocrRect.X + 2, ocrRect.Y - 18);
             }
 
             // --- 文校模式 (TextReview) 独有层 (可选) ---
-            if (_currentMouseDownAction == DoTextReviewMouseDown)
+            if (_currentDownAction == DoTextReviewMouseDown)
             {
                 e.Graphics.ResetTransform();
                 // 在左上角画个小标识，提醒用户正在文校模式
@@ -320,21 +343,7 @@ namespace mylabel
         #endregion
 
         #region PicView事件
-        // 定义模式枚举，替代硬编码字符串
-        public enum ViewMode { Default, OCR, TextReview }
 
-        // 交互状态变量
-        private Point _lastMousePoint;
-        private bool _isDragging = false;
-        private bool _isSelecting = false;
-        private Rectangle _selectionRect;
-        private ImageLabel _draggingLabel = null;
-        private ImageLabel _hoveredLabel = null;
-
-        // 委托
-        private Action<MouseEventArgs> _onMouseDown;
-        private Action<MouseEventArgs> _onMouseMove;
-        private Action<MouseEventArgs> _onMouseUp;
         private Point mouseDownLocation;
         private Point _rightClickStartPoint;
         private bool isDragging = false;
@@ -343,65 +352,84 @@ namespace mylabel
 
 
         private ImageLabel _pendingLabel = null;
-        private bool isOCRMode = false;
+        private ImageLabel _draggingLabel = null;
         private Point ocrStartPoint;         // 截图起点
         private Rectangle ocrRect;           // 当前拉框的矩形区域（屏幕坐标）
         private bool isSelectingRect = false; // 是否正在拉框
 
-        private Action<MouseEventArgs> _currentMouseDownAction;
-        private Action<MouseEventArgs> _currentMouseMoveAction;
-        private Action<MouseEventArgs> _currentMouseUpAction;
+        private Action<MouseEventArgs> _currentDownAction;
+        private Action<MouseEventArgs> _currentMoveAction;
+        private Action<MouseEventArgs> _currentUpAction;
         // 切换模式时，直接更换这个 Action
         private void SetMode(string mode)
         {
             // 1. 清理通用状态
-            isSelectingRect = false;
-            isDragging = false;//否则拖完一次地图片后，下次移动鼠标它还会跟着你跑。
-            isPotentialClick = false;
-            TextReviewtoolTip.Hide(PicView);
-
+            ResetInternalState();
             // 2. 改激活按钮颜色
+            RefreshButtonVisuals(mode);
+            // 3. 绑定对应的委托
+            switch (mode)
+            {
+                case "OCR":
+                    BindActions(DoOCRMouseDown, DoOCRMouseMove, DoOCRMouseUp);
+                    break;
+                case "TextReview":
+                    BindActions(DoTextReviewMouseDown, DoTextReviewMouseMove, DoTextReviewMouseUp);
+                    break;
+                case "LabelMode": // 显式定义你的默认打点模式
+                default:
+                    BindActions(DoDefaultMouseDown, DoDefaultMouseMove, DoDefaultMouseUp);
+                    break;
+            }
+            PicView.Invalidate();
+        }
+        // 辅助方法：统一重置状态
+        private void ResetInternalState()
+        {
+            isSelectingRect = false;
+            isDragging = false;
+            isPotentialClick = false;
+            _pendingLabel = null;
+            _draggingLabel = null;
+            TextReviewtoolTip.Hide(PicView);
+        }
+
+        // 辅助方法：统一绑定委托
+        private void BindActions(Action<MouseEventArgs> down, Action<MouseEventArgs> move, Action<MouseEventArgs> up)
+        {
+            _currentDownAction = down;
+            _currentMoveAction = move;
+            _currentUpAction = up;
+        }
+        private void RefreshButtonVisuals(string activeMode)
+        {
+            // 定义 按钮 -> 匹配模式 的映射
+            var modeMap = new Dictionary<Button, bool>
+            {
+                { OCRMode, activeMode == "OCR" },
+                { TextReviewMode, activeMode == "TextReview" },
+                { LabelMode, activeMode == "LabelMode" || activeMode == "Default" }
+            };
+
+            // 获取当前主题色（只获取一次）
             bool isDark = Modules.ThemeManager.IsDarkMode;
             Color activeBg = Modules.ThemeManager.AccentColor;
             Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : SystemColors.Control;
             Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
             Color defaultFore = Modules.ThemeManager.TextColor;
 
-            // 3. 按钮视觉刷新
-            UpdateBtnStyle(OCRMode, mode == "OCR", activeBg, activeFore, defaultBg, defaultFore);
-            UpdateBtnStyle(TextReviewMode, mode == "TextReview", activeBg, activeFore, defaultBg, defaultFore);
-            UpdateBtnStyle(LabelMode, mode == "LabelMode" || mode == "Default", activeBg, activeFore, defaultBg, defaultFore);
-
-            switch (mode)
+            // 循环遍历，自动更新样式
+            foreach (var item in modeMap)
             {
-                case "OCR":
-                    _currentMouseDownAction = DoOCRMouseDown;
-                    _currentMouseMoveAction = DoOCRMouseMove;
-                    _currentMouseUpAction = DoOCRMouseUp;
-                    isOCRMode = true;
-                    break;
+                Button btn = item.Key;
+                bool isActive = item.Value;
 
-                case "TextReview":
-                    _currentMouseDownAction = DoTextReviewMouseDown;
-                    _currentMouseMoveAction = DoTextReviewMouseMove;
-                    _currentMouseUpAction = DoTextReviewMouseUp;
-                    isOCRMode = false;
-                    break;
+                btn.BackColor = isActive ? activeBg : defaultBg;
+                btn.ForeColor = isActive ? activeFore : defaultFore;
 
-                case "LabelMode": // 显式定义你的默认打点模式
-                default:
-                    _currentMouseDownAction = DoDefaultMouseDown;
-                    _currentMouseMoveAction = DoDefaultMouseMove;
-                    _currentMouseUpAction = DoDefaultMouseUp;
-                    isOCRMode = false;
-                    break;
+                // 可选：如果是激活状态，可以稍微加粗字体或改变边框
+                // btn.Font = new Font(btn.Font, isActive ? FontStyle.Bold : FontStyle.Regular);
             }
-            PicView.Invalidate();
-        }
-        private void UpdateBtnStyle(Button btn, bool isActive, Color activeBg, Color activeFore, Color defBg, Color defFore)
-        {
-            btn.BackColor = isActive ? activeBg : defBg;
-            btn.ForeColor = isActive ? activeFore : defFore;
         }
         private void PicView_MouseDown(object sender, MouseEventArgs e)
         {
@@ -411,7 +439,7 @@ namespace mylabel
                 _rightClickStartPoint = e.Location;
             }
             else if (e.Button == MouseButtons.Left)
-                _currentMouseDownAction?.Invoke(e);
+                _currentDownAction?.Invoke(e);
         }
         #region down函数
         private void DoDefaultMouseDown(MouseEventArgs e)// --- 模式 A: 默认按下逻辑 (打点与拖拽准备) ---
@@ -446,31 +474,15 @@ namespace mylabel
         #endregion
         private void PicView_MouseMove(object sender, MouseEventArgs e)
         {
-            _currentMouseMoveAction?.Invoke(e);
+            _currentMoveAction?.Invoke(e);
         }
         #region move函数
         private void DoDefaultMouseMove(MouseEventArgs e)
         {
-            // 判定是否开始拖拽
-            if (e.Button == MouseButtons.Left && isPotentialClick)
-            {
-                int dx = e.X - mouseDownLocation.X;
-                int dy = e.Y - mouseDownLocation.Y;
-                if (Math.Sqrt(dx * dx + dy * dy) > ClickThreshold)
-                {
-                    isDragging = true;
-                    isPotentialClick = false;
-                }
-            }
+            if (e.Button != MouseButtons.Left) return;
 
-            // 执行拖拽
-            if (isDragging)
-            {
-                offset.X += e.X - mouseDownLocation.X;
-                offset.Y += e.Y - mouseDownLocation.Y;
-                mouseDownLocation = e.Location;
-                PicView.Invalidate();
-            }
+            CheckDragStarted(e.Location);
+            if (isDragging) MoveImageOffset(e.Location);
         }// --- 模式 A: 默认/拖拽模式 ---
         private void DoOCRMouseMove(MouseEventArgs e)
         {
@@ -487,79 +499,64 @@ namespace mylabel
         private ImageLabel _showingLabel = null; // 当前正在显示的标签对象
         private void DoTextReviewMouseMove(MouseEventArgs e)// --- 模式 C: 文校模式 (包含拖拽 + 悬停检测) ---
         {
-            if (e.Button == MouseButtons.Left && isPotentialClick)
+            // 1. 拖拽逻辑处理
+            if (e.Button == MouseButtons.Left)
             {
-                int dx = e.X - mouseDownLocation.X;
-                int dy = e.Y - mouseDownLocation.Y;
-                if (Math.Sqrt(dx * dx + dy * dy) > ClickThreshold)
+                CheckDragStarted(e.Location);
+                if (isDragging)
                 {
-                    isDragging = true;
-                    isPotentialClick = false;
-                }
-            }
-            // 1. 如果正在拖拽
-            if (isDragging)
-            {
-                if (_draggingLabel != null)
-                {
-                    // --- 模式：拖拽标签 ---
-                    PointF imgPt = ScreenToImage(e.Location);
-
-                    // 1. 先计算新坐标
-                    float newX = Math.Max(0, Math.Min(1, imgPt.X / image.Width));
-                    float newY = Math.Max(0, Math.Min(1, imgPt.Y / image.Height));
-
-                    // 2. 整体替换（这是处理 struct 的标准做法）
-                    // 假设 BoundingBox 是 struct，我们创建一个全新的结构体实例赋回去
-                    _draggingLabel.Position = new BoundingBox
+                    if (_draggingLabel != null) // 正在拖拽标签
                     {
-                        X = newX,
-                        Y = newY
-                    };
-                    TextReviewtoolTip.Show(_draggingLabel.Text, PicView, e.X + 15, e.Y + 15);
-                    PicView.Invalidate();
+                        PointF imgPt = ScreenToImage(e.Location);
+                        _draggingLabel.Position = new BoundingBox
+                        {
+                            X = Math.Clamp(imgPt.X / image.Width, 0, 1),
+                            Y = Math.Clamp(imgPt.Y / image.Height, 0, 1)
+                        };
+                        //TextReviewtoolTip.Show(_draggingLabel.Text, PicView, e.X + 15, e.Y + 15);
+                        PicView.Invalidate();
+                    }
+                    else // 正在拖拽底图
+                    {
+                        MoveImageOffset(e.Location);
+                    }
+                    return; // 拖拽时不进行悬停检测
                 }
-                else
-                {
-                    // --- 模式：拖拽图片 ---
-                    DoDefaultMouseMove(e);
-                }
-                return; // 正在拖拽时，不执行下方的悬停检测逻辑
             }
-            if (CurrentInfo == null || image == null) return;
-            // 3. 悬停检测逻辑
 
-            float imgX = (e.X - offset.X) / scale;
-            float imgY = (e.Y - offset.Y) / scale;
-            float threshold = 30f / scale;
+            // 2. 悬停检测逻辑 (优化性能：使用距离平方比较)
+            HandleHoverDetection(e.Location);
+
+        }
+        private void HandleHoverDetection(Point mousePos)// 2. 悬停检测逻辑 (优化性能：使用距离平方比较)
+        {
+            if (CurrentInfo?.Labels == null || image == null) return;
+
+            float imgX = (mousePos.X - offset.X) / scale;
+            float imgY = (mousePos.Y - offset.Y) / scale;
+            float thresholdSq = (30f / scale) * (30f / scale);
 
             var foundLabel = CurrentInfo.Labels.FirstOrDefault(l =>
             {
-                float labelPixelX = (float)(l.Position.X * image.Width);
-                float labelPixelY = (float)(l.Position.Y * image.Height);
-                return Math.Sqrt(Math.Pow(labelPixelX - imgX, 2) + Math.Pow(labelPixelY - imgY, 2)) < threshold;
+                float lx = (float)(l.Position.X * image.Width);
+                float ly = (float)(l.Position.Y * image.Height);
+                return Math.Pow(lx - imgX, 2) + Math.Pow(ly - imgY, 2) < thresholdSq;
             });
 
-            if (foundLabel != null)
+            if (foundLabel != _pendingLabel)
             {
-                if (foundLabel != _pendingLabel)
-                {
-                    _pendingLabel = foundLabel;
-                    hoverTimer.Stop();
-                    hoverTimer.Start();
-                }
-            }
-            else
-            {
+                _pendingLabel = foundLabel;
+                hoverTimer.Stop();
                 if (_pendingLabel != null)
                 {
-                    _pendingLabel = null;
-                    _showingLabel = null; // 重点：清空显示记录
-                    hoverTimer.Stop();
+                    hoverTimer.Start();
+                }
+                else
+                {
+                    _showingLabel = null;
                     TextReviewtoolTip.Hide(PicView);
                 }
             }
-
         }
         private void hoverTimer_Tick(object sender, EventArgs e)
         {
@@ -589,6 +586,30 @@ namespace mylabel
                     PicView.PointToClient(Cursor.Position).Y + 15);
             }
         }
+
+        // 计算两点间距离的平方（比直接算距离快，因为不需要开方）
+        private double GetDistanceSq(Point p1, Point p2) => Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2);
+
+        // 处理图片平移的通用逻辑
+        private void MoveImageOffset(Point currentPos)
+        {
+            offset.X += currentPos.X - mouseDownLocation.X;
+            offset.Y += currentPos.Y - mouseDownLocation.Y;
+            mouseDownLocation = currentPos;
+            PicView.Invalidate();
+        }
+
+        // 检查是否触发拖拽阈值
+        private bool CheckDragStarted(Point currentPos)
+        {
+            if (isPotentialClick && GetDistanceSq(currentPos, mouseDownLocation) > ClickThreshold * ClickThreshold)
+            {
+                isDragging = true;
+                isPotentialClick = false;
+                return true;
+            }
+            return false;
+        }
         #endregion
         private async void PicView_MouseUp(object sender, MouseEventArgs e)
         {
@@ -606,7 +627,7 @@ namespace mylabel
             }
             else if (e.Button == MouseButtons.Left)
             {
-                _currentMouseUpAction?.Invoke(e);
+                _currentUpAction?.Invoke(e);
             }
             // 无论什么模式，松开鼠标后这些标志位都要重置
             _draggingLabel = null;
@@ -1077,11 +1098,11 @@ namespace mylabel
         }
         private void TextReviewMode_Click(object sender, EventArgs e)
         {
-            SetMode(_currentMouseDownAction == DoTextReviewMouseDown ? "LabelMode" : "TextReview");
+            SetMode(_currentDownAction == DoTextReviewMouseDown ? "LabelMode" : "TextReview");
         }
         private void OCRMode_Click(object sender, EventArgs e)
         {
-            SetMode(_currentMouseDownAction == DoOCRMouseDown ? "LabelMode" : "OCR");
+            SetMode(_currentDownAction == DoOCRMouseDown ? "LabelMode" : "OCR");
         }
 
         private string CaptureOCRImageAndGetPath()
@@ -1248,8 +1269,8 @@ namespace mylabel
             // 一键切换
             ThemeManager.ToggleTheme(this);
             // 关键：重新调用一次 SetMode，刷新当前处于激活状态按钮的颜色
-            if (_currentMouseDownAction == DoOCRMouseDown) SetMode("OCR");
-            else if (_currentMouseDownAction == DoTextReviewMouseDown) SetMode("TextReview");
+            if (_currentDownAction == DoOCRMouseDown) SetMode("OCR");
+            else if (_currentDownAction == DoTextReviewMouseDown) SetMode("TextReview");
             else SetMode("LabelMode");
             TextBox_FocusChanged(LabelTextBox, null); TextBox_FocusChanged(RemarktextBox, null);
             PicView.Invalidate();

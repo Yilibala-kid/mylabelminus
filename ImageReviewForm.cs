@@ -3,6 +3,7 @@ using SkiaSharp;
 using SkiaSharp.Views.Desktop;
 using System.Data;
 using System.Drawing.Imaging;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 
 
 namespace mylabel
@@ -35,7 +36,6 @@ namespace mylabel
             public string ImagePath { get; set; } = string.Empty;
         }
         private Dictionary<Control, ViewState> _viewStates = new Dictionary<Control, ViewState>();
-
 
         private List<string> _leftFolderFiles = new List<string>();
         private List<string> _rightFolderFiles = new List<string>();
@@ -71,6 +71,18 @@ namespace mylabel
         private Point ScreenShotStartPoint;         // 截图起点
         private Rectangle ScreenShotRect;           // 当前拉框的矩形区域（屏幕坐标）
         private bool isSelectingRect = false; // 是否正在拉框
+        private string currentScreenShotpath = null;
+        private bool isBrushMode = false; // 画笔模式开关
+        private SKPath _currentPath = null; // 当前正在画的线条
+        private Dictionary<Control, List<SKPath>> _viewPaths = new Dictionary<Control, List<SKPath>>();
+        private List<SKPath> GetPathsForControl(Control c)
+        {
+            if (!_viewPaths.ContainsKey(c))
+            {
+                _viewPaths[c] = new List<SKPath>();
+            }
+            return _viewPaths[c];
+        }
 
         private SKGLControl PicReview1;
         private SKGLControl PicReview2;
@@ -142,6 +154,8 @@ namespace mylabel
                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             // 根据 isLinked 的初始值设置按钮颜色
             LinkView.BackColor = isLinked ? Color.LightGreen : SystemColors.Control;
+
+            Modules.ThemeManager.ApplyTheme(this);
         }
         #region 图像绘制
         private void PicView_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
@@ -161,13 +175,33 @@ namespace mylabel
                 canvas.Scale(state.Scale, state.Scale);
 
                 // 使用高质量抗锯齿，GPU 会处理这些计算，不会卡顿
-                using (var paint = new SKPaint {})
+                using (var paint = new SKPaint { })
                 {
                     paint.IsAntialias = true;
                     paint.FilterQuality = SKFilterQuality.Medium; // 关键：解决锯齿
                     paint.IsDither = true;                      // 关键：解决颜色断层
 
                     canvas.DrawBitmap(state.Image, 0, 0, paint);
+
+                    var paths = GetPathsForControl(pb); // 只获取当前 pb 的线条
+                    if (paths.Count > 0)
+                    {
+                        using (var pathPaint = new SKPaint
+                        {
+                            Style = SKPaintStyle.Stroke,
+                            Color = SKColors.Red,
+                            StrokeWidth = 3 / state.Scale,
+                            IsAntialias = true,
+                            StrokeCap = SKStrokeCap.Round,
+                            StrokeJoin = SKStrokeJoin.Round
+                        })
+                        {
+                            foreach (var path in paths)
+                            {
+                                canvas.DrawPath(path, pathPaint);
+                            }
+                        }
+                    }
                 }
                 canvas.Restore();
             }
@@ -285,8 +319,7 @@ namespace mylabel
 
         //}
         #endregion
-        #region PicView事件通用逻辑
-
+        #region PicView事件通用逻辑        
         private void PicView_MouseDown(object sender, MouseEventArgs e)
         {
             if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
@@ -295,6 +328,18 @@ namespace mylabel
 
             if (e.Button == MouseButtons.Left)
             {
+                // --- 优先判定：画笔模式 ---
+                if (isBrushMode)
+                {
+                    _currentPath = new SKPath();
+                    PointF imgPt = ScreenToImage(pb, e.Location);
+                    _currentPath.MoveTo(imgPt.X, imgPt.Y);
+
+                    // 只添加到当前触发事件的控件列表中
+                    GetPathsForControl(pb).Add(_currentPath);
+                    return;
+                }
+
                 if (isScreenShotMode)
                 {
                     isSelectingRect = true;
@@ -305,20 +350,27 @@ namespace mylabel
                 {
                     mouseDownLocation = e.Location;
                     isDragging = false;
-                    isPotentialClick = true; // 标记可能是点击，MouseMove 中会判断位移
+                    isPotentialClick = true;
                 }
             }
         }
 
         private void PicView_MouseMove(object sender, MouseEventArgs e)
         {
-            // 1. 将 sender 转换为 Control，并从字典获取状态
             if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
             var state = _viewStates[pb];
-
-            // 2. 判定图片是否存在（现在检查 SKBitmap）
             if (state.Image == null) return;
-            // --- 模式 1：截图/OCR 拉框模式 ---
+
+            // --- 优先判定：画笔模式绘制 ---
+            if (isBrushMode && e.Button == MouseButtons.Left && _currentPath != null)
+            {
+                PointF imgPt = ScreenToImage(pb, e.Location);
+                _currentPath.LineTo(imgPt.X, imgPt.Y);
+                pb.Invalidate(); // 立即触发重绘
+                return;
+            }
+
+            // --- 原有模式 1：截图 ---
             if (isScreenShotMode && isSelectingRect)
             {
                 int x = Math.Min(ScreenShotStartPoint.X, e.X);
@@ -326,11 +378,11 @@ namespace mylabel
                 int width = Math.Abs(ScreenShotStartPoint.X - e.X);
                 int height = Math.Abs(ScreenShotStartPoint.Y - e.Y);
                 ScreenShotRect = new Rectangle(x, y, width, height);
-
                 pb.Invalidate();
                 return;
             }
-            // --- 模式 2：判断是否进入拖拽状态 ---
+
+            // --- 原有模式 2 & 3：拖拽 ---
             if (e.Button == MouseButtons.Left && isPotentialClick)
             {
                 int dx = e.X - mouseDownLocation.X;
@@ -341,22 +393,49 @@ namespace mylabel
                     isPotentialClick = false;
                 }
             }
-            // --- 模式 3：执行平移（拖拽） ---
+
             if (isDragging)
             {
                 PointF tempOffset = state.Offset;
-                float dx = e.X - mouseDownLocation.X;
-                float dy = e.Y - mouseDownLocation.Y;
-
-                tempOffset.X += dx;
-                tempOffset.Y += dy;
+                tempOffset.X += e.X - mouseDownLocation.X;
+                tempOffset.Y += e.Y - mouseDownLocation.Y;
                 state.Offset = tempOffset;
-
                 mouseDownLocation = e.Location;
-                pb.Invalidate(); // 触发当前控件重绘
+                pb.Invalidate();
             }
         }
 
+        private async void PicView_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!(sender is Control currentPic)) return;
+
+            // --- 画笔结束 ---
+            if (isBrushMode)
+            {
+                _currentPath = null;
+                return;
+            }
+
+            if (e.Button != MouseButtons.Left) return;
+
+            // --- 原有截图/同步逻辑 ---
+            if (isScreenShotMode && isSelectingRect)
+            {
+                isSelectingRect = false;
+                if (ScreenShotRect.Width > 5 && ScreenShotRect.Height > 5)
+                {
+                    currentScreenShotpath = CaptureScreenShotImageAndGetPath(currentPic);
+                    PointF cornerPt = ScreenToImage(currentPic, new Point(ScreenShotRect.Right, ScreenShotRect.Top));
+                }
+            }
+            else if (isDragging && isLinked)
+            {
+                Control otherPb = (currentPic == PicReview1) ? PicReview2 : PicReview1;
+                SyncView(currentPic, otherPb);
+            }
+            isDragging = false;
+            isPotentialClick = false;
+        }
         private void PicView_MouseWheel(object sender, MouseEventArgs e)
         {
             if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
@@ -385,35 +464,6 @@ namespace mylabel
                 }
             }
         }
-        private async void PicView_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (!(sender is Control currentPic)) return;
-            if (e.Button != MouseButtons.Left) return;
-
-            // --- 截图模式 ---
-            if (isScreenShotMode && isSelectingRect)
-            {
-                isSelectingRect = false;
-                if (ScreenShotRect.Width > 5 && ScreenShotRect.Height > 5)
-                {
-                    // 注意：CaptureScreenShotImageAndGetPath 内部如果涉及 PicView 
-                    // 也需要修改为传参 currentPic
-                    string filePath = CaptureScreenShotImageAndGetPath(currentPic);
-
-                    // 传入 currentPic，确保使用该窗口的 scale 和 offset
-                    PointF cornerPt = ScreenToImage(currentPic, new Point(ScreenShotRect.Right, ScreenShotRect.Top));
-
-                }
-            }
-            else if (isDragging && isLinked)
-            {
-                Control otherPb = (currentPic == PicReview1) ? PicReview2 : PicReview1;
-                // 执行对齐同步
-                SyncView(currentPic, otherPb);
-            }
-            isDragging = false;
-            isPotentialClick = false;
-        }
         private void PicView_Click(object sender, EventArgs e)
         {
             // 1. 确保 sender 是 Control 类型
@@ -426,7 +476,6 @@ namespace mylabel
             }
         }
         #endregion
-
 
 
         #region 顶栏功能
@@ -501,10 +550,10 @@ namespace mylabel
         private void UpdateComboBox()
         {
             PicNamecomboBox.Items.Clear();
-        // 1. 处理左侧列表：安全检查并转换
-        var leftNames = (_leftFolderFiles ?? new List<string>())
-                            .Select(GetPureFileName)
-                            .Where(n => !string.IsNullOrEmpty(n));
+            // 1. 处理左侧列表：安全检查并转换
+            var leftNames = (_leftFolderFiles ?? new List<string>())
+                                .Select(GetPureFileName)
+                                .Where(n => !string.IsNullOrEmpty(n));
             // 2. 处理右侧列表：安全检查并转换
             var rightNames = (_rightFolderFiles ?? new List<string>())
                              .Select(GetPureFileName)
@@ -551,11 +600,10 @@ namespace mylabel
                 PicNamecomboBox.SelectedIndex = 0;
             }
         }
-        private void OpenFolder1_Click(object sender, EventArgs e) => OpenFolderOrArchive(true);
-
-
-        private void OpenFolder2_Click(object sender, EventArgs e) => OpenFolderOrArchive(false);
-
+        private void OpenPicandArc1_Click(object sender, EventArgs e) => OpenFolderOrArchive(true);
+        private void OpenPicandArc2_Click(object sender, EventArgs e) => OpenFolderOrArchive(false);
+        private void Openfolder1_Click_1(object sender, EventArgs e) => OpenSpecificFolder(true);
+        private void Openfolder2_Click_1(object sender, EventArgs e) => OpenSpecificFolder(false);
         private void ScreenShotButton_Click(object sender, EventArgs e)
         {
             SetScreenShotMode(!isScreenShotMode);
@@ -740,6 +788,47 @@ namespace mylabel
                 }
             }
         }
+        private void OpenSpecificFolder(bool isLeft)
+        {
+            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+            {
+                fbd.Description = "选择包含图片的文件夹";
+                fbd.ShowNewFolderButton = false;
+
+                if (fbd.ShowDialog() == DialogResult.OK)
+                {
+                    string folderPath = fbd.SelectedPath;
+
+                    // 获取文件夹下所有支持的图片格式
+                    List<string> finalFiles = Directory.GetFiles(folderPath)
+                        .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                        .OrderBy(f => f) // 排序一下，通常按文件名排序比较自然
+                        .ToList();
+
+                    if (finalFiles.Count == 0)
+                    {
+                        MessageBox.Show("该文件夹内没有找到支持的图片。");
+                        return;
+                    }
+
+                    // 赋值到全局变量（文件夹模式下 zipPath 设为 null）
+                    if (isLeft)
+                    {
+                        _leftZipPath = null;
+                        _leftFolderFiles = finalFiles;
+                    }
+                    else
+                    {
+                        _rightZipPath = null;
+                        _rightFolderFiles = finalFiles;
+                    }
+
+                    // 更新 UI
+                    UpdateComboBox();
+                    if (PicNamecomboBox.Items.Count > 0) PicNamecomboBox.SelectedIndex = 0;
+                }
+            }
+        }
         private List<string> LoadEntriesFromZip(string zipFilePath)
         {
             List<string> entryNames = new List<string>();
@@ -828,7 +917,7 @@ namespace mylabel
         #endregion
 
         #region 按键功能
-        string rawText = "点击此处加载文件夹/图片\nQ(按住)：截图\nA：上一张\nD：下一张\nR：重置显示";
+        string rawText = "点击此处选择图片/压缩包\nQ(按住)：截图\nA：上一张\nD：下一张\nR：重置显示";
         // 按键按下
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -854,7 +943,7 @@ namespace mylabel
         }
         private void myKeyDown(object sender, KeyEventArgs e)
         {
-            if(_isKeyDown) return; // 防止按键重复触发
+            if (_isKeyDown) return; // 防止按键重复触发
             _isKeyDown = true;
             bool hasItems = PicNamecomboBox.Items.Count > 0;// 如果列表为空，方向键逻辑不执行，但 'A' 键截图模式仍可执行
 
@@ -866,6 +955,10 @@ namespace mylabel
                     e.Handled = true;
                     break;
 
+                case Keys.F:
+                    SetBrushMode(true);
+                    e.Handled = true;
+                    break;
                 // R 键重置显示
                 case Keys.R:
                     ResetView(PicReview1);
@@ -896,12 +989,19 @@ namespace mylabel
         // 按键松开
         private void myKeyUp(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Q)
+            switch (e.KeyCode)
             {
-                SetScreenShotMode(false);
-                e.Handled = true;
+                case Keys.Q:
+                    SetScreenShotMode(false);
+                    break;
+
+                case Keys.F:
+                    SetBrushMode(false);
+                    e.Handled = true;
+                    break;
             }
             _isKeyDown = false;
+            e.Handled = true;
         }
         // 将核心逻辑提取出来，接受一个明确的 bool 值
         private void SetScreenShotMode(bool active)
@@ -920,6 +1020,42 @@ namespace mylabel
             ScreenShotRect = Rectangle.Empty;
 
             // 3. 刷新视图
+            PicReview1.Invalidate();
+            PicReview2.Invalidate();
+        }
+        private void SetBrushMode(bool active)
+        {
+            // 1. 状态检查
+            if (isBrushMode == active) return;
+
+            isBrushMode = active;
+
+            // 2. 按钮视觉反馈 (假设你的画笔按钮叫 BrushButton)
+            BrushButton.BackColor = isBrushMode ? Color.LightCoral : SystemColors.Control;
+            BrushButton.Text = isBrushMode ? "正在画图..." : "画图(F)";
+
+            // 3. 鼠标指针反馈：画图时显示十字准心，平时显示默认箭头
+            Cursor brushCursor = isBrushMode ? Cursors.Cross : Cursors.Default;
+            PicReview1.Cursor = brushCursor;
+            PicReview2.Cursor = brushCursor;
+
+            // 4. 重置正在画的路径（防止状态卡死）
+            if (!isBrushMode) _currentPath = null;
+
+            // 5. 刷新（可选，如果需要即时隐藏/显示笔迹）
+            // PicReview1.Invalidate();
+        }
+
+        private void BrushButton_Click(object sender, EventArgs e)
+        {
+            SetBrushMode(!isBrushMode);
+        }
+        private void ClearBrush_Click(object sender, EventArgs e)
+        {
+            // 清空所有存储的路径
+            _viewPaths.Clear();
+
+            // 强制重绘两个视图
             PicReview1.Invalidate();
             PicReview2.Invalidate();
         }
@@ -1119,6 +1255,238 @@ namespace mylabel
             return codecs.FirstOrDefault(c => c.MimeType == mimeType);
         }
         #endregion
+        #region 编辑截图
+
+        private Form previewPopup;
+        private SKGLControl glControl;
+        private SKBitmap baseBitmap;
+        private SKCanvas drawingCanvas; // 用于持久化画迹
+        private bool isDrawing = false;
+        private SKPoint lastPt;
+        private System.Windows.Forms.Timer closeTimer;
+        private void InitPreviewPopup()
+        {
+            if (previewPopup != null) return;
+
+            previewPopup = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.Manual,
+                ShowInTaskbar = false,
+                TopMost = true,
+                Size = new Size(500, 350), // 悬浮窗稍大一点方便画画
+                BackColor = Color.RoyalBlue,
+                Padding = new Padding(2)
+            };
+            // --- 初始化计时器 ---
+            closeTimer = new System.Windows.Forms.Timer();
+            closeTimer.Interval = 1000; // 2秒
+            closeTimer.Tick += (s, e) =>
+            {
+                closeTimer.Stop();
+                if (!isDrawing)
+                { // 如果正在画画，不强制关闭
+                    SaveAndHidePopup();
+                }
+            };
+            // 预览窗的事件：鼠标进入取消倒计时，离开启动倒计时
+
+            previewPopup.Deactivate += (s, e) =>
+            {
+                // 如果正在画画（鼠标没松开），不关闭
+                if (isDrawing) return;
+
+                // 使用 BeginInvoke 避开 WndProc 消息循环冲突
+                previewPopup.BeginInvoke(new Action(() =>
+                {
+                    SaveAndHidePopup();
+                }));
+            };
+            glControl = new SKGLControl
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(1) // 留出 1px 边框
+            };
+
+            // 绑定事件
+            glControl.PaintSurface += GlControl_PaintSurface;
+            glControl.MouseDown += GlControl_MouseDown;
+            glControl.MouseMove += GlControl_MouseMove;
+            glControl.MouseUp += GlControl_MouseUp;
+            glControl.MouseEnter += (s, e) => closeTimer.Stop();
+            glControl.MouseLeave += (s, e) =>
+            {
+                // 只有当窗口可见且没在画画时才启动倒计时
+                if (previewPopup.Visible && !isDrawing) closeTimer.Start();
+            };
+            previewPopup.Controls.Add(glControl);
+        }
+        private void SaveAndHidePopup()
+        {
+            // 防止重复进入（比如弹出提示框时又触发了 Deactivate）
+            if (previewPopup == null || !previewPopup.Visible) return;
+
+            try
+            {
+                // 1. 必须先释放 Canvas，确保所有绘制操作已从缓存刷入 baseBitmap
+                drawingCanvas?.Dispose();
+                drawingCanvas = null;
+
+                if (baseBitmap != null)
+                {
+                    using (var skImage = SKImage.FromBitmap(baseBitmap))
+                    using (var encodedData = skImage.Encode(SKEncodedImageFormat.Png, 100))
+                    {
+                        byte[] bytes = encodedData.ToArray();
+
+                        // 2. 保存到原文件
+                        File.WriteAllBytes(currentScreenShotpath, bytes);
+
+                        // 3. 存入剪贴板 (封装在 Try 内，防止剪贴板被其他程序占用)
+                        try
+                        {
+                            using (var ms = new MemoryStream(bytes))
+                            {
+                                using (var drawingImg = System.Drawing.Image.FromStream(ms))
+                                {
+                                    Clipboard.SetImage(drawingImg);
+                                }
+                            }
+                        }
+                        catch { /* 剪贴板占用时忽略 */ }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("保存失败: " + ex.Message);
+            }
+            finally
+            {
+                // 隐藏窗口，并清理位图
+                previewPopup.Hide();
+                baseBitmap?.Dispose();
+                baseBitmap = null;
+            }
+        }
+        // --- 鼠标进入按钮：显示并准备画布 ---
+        private void ShowShotScreen_MouseEnter(object sender, EventArgs e)
+        {
+
+
+            if (!File.Exists(currentScreenShotpath)) return;
+
+            InitPreviewPopup();
+            closeTimer?.Stop(); // 鼠标回来了，停止倒计时
+            if (!previewPopup.Visible)
+            {
+                // 释放旧资源并加载新图
+                drawingCanvas?.Dispose();
+                baseBitmap?.Dispose();
+
+                // 加载为可读写的 Bitmap
+                baseBitmap = SKBitmap.Decode(currentScreenShotpath);
+                drawingCanvas = new SKCanvas(baseBitmap);
+
+                // 2. ---【关键】智能尺寸计算 ---
+                // 获取屏幕可用工作区尺寸
+                var workingArea = Screen.PrimaryScreen.WorkingArea;
+                float maxW = workingArea.Width * 0.6f; // 最大宽度占屏幕80%
+                float maxH = workingArea.Height * 0.6f; // 最大高度占屏幕80%
+
+                float imgW = baseBitmap.Width;
+                float imgH = baseBitmap.Height;
+
+                // 计算缩放比，确保图片能完整装入最大限制区域
+                float scale = Math.Min(maxW / imgW, maxH / imgH);
+
+                // 如果图片本身很小，就不放大（可选：scale = Math.Min(1.0f, scale);）
+                // 最终窗口大小 = 图片原始大小 * 缩放比
+                previewPopup.Size = new Size((int)(imgW * scale), (int)(imgH * scale));
+
+                // 3. 定位（保持在按钮上方，且不超出屏幕顶部）
+                Control btn = (Control)sender;
+                Point btnPos = btn.PointToScreen(Point.Empty);
+                int posX = btnPos.X;
+                int posY = btnPos.Y - previewPopup.Height - 10;
+
+                // 如果上方空间不够，就显示在按钮下方
+                if (posY < workingArea.Top)
+                {
+                    posY = btnPos.Y + btn.Height + 10;
+                }
+                previewPopup.Location = new Point(posX, posY);
+
+                previewPopup.Show();
+                glControl.Invalidate();
+            }
+        }
+        private void ShowShotScreen_MouseLeave(object sender, EventArgs e)
+        {
+            // 鼠标离开按钮，如果没进入预览窗，2秒后关闭
+            if (previewPopup != null && previewPopup.Visible && !isDrawing)
+            {
+                closeTimer.Start();
+            }
+        }
+        // --- 绘图逻辑 ---
+        private void GlControl_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                isDrawing = true;
+                lastPt = GetImagePoint(e.X, e.Y);
+            }
+        }
+
+        private void GlControl_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (isDrawing)
+            {
+                var currPt = GetImagePoint(e.X, e.Y);
+                using (var paint = new SKPaint
+                {
+                    Color = SKColors.Red,
+                    StrokeWidth = 5,
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeCap = SKStrokeCap.Round
+                })
+                {
+                    drawingCanvas.DrawLine(lastPt, currPt, paint);
+                }
+                lastPt = currPt;
+                glControl.Invalidate();
+            }
+        }
+
+        private void GlControl_MouseUp(object sender, MouseEventArgs e) => isDrawing = false;
+
+        // --- 坐标映射 (适配 Zoom 模式) ---
+        private SKPoint GetImagePoint(int x, int y)
+        {
+            float cw = glControl.CanvasSize.Width;
+            float ch = glControl.CanvasSize.Height;
+            float ratio = Math.Min(cw / baseBitmap.Width, ch / baseBitmap.Height);
+            float ox = (cw - baseBitmap.Width * ratio) / 2;
+            float oy = (ch - baseBitmap.Height * ratio) / 2;
+            return new SKPoint((x * (float)glControl.CanvasSize.Width / glControl.Width - ox) / ratio,
+                               (y * (float)glControl.CanvasSize.Height / glControl.Height - oy) / ratio);
+        }
+
+        private void GlControl_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
+        {
+            if (baseBitmap == null) return;
+            var canvas = e.Surface.Canvas;
+            canvas.Clear(SKColors.Black);
+            float ratio = Math.Min((float)glControl.CanvasSize.Width / baseBitmap.Width, (float)glControl.CanvasSize.Height / baseBitmap.Height);
+            canvas.Scale(ratio);
+            float dx = (glControl.CanvasSize.Width / ratio - baseBitmap.Width) / 2;
+            float dy = (glControl.CanvasSize.Height / ratio - baseBitmap.Height) / 2;
+            canvas.DrawBitmap(baseBitmap, dx, dy);
+        }
+        #endregion
+
 
 
     }

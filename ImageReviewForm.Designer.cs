@@ -41,17 +41,23 @@
             LastPic = new Button();
             NextPic = new Button();
             ChangePic1 = new Button();
-            OpenFolder2 = new Button();
-            OpenFolder1 = new Button();
+            panel5 = new Panel();
+            Openfolder1 = new Button();
+            OpenPicandArc1 = new Button();
+            panel6 = new Panel();
+            Openfolder2 = new Button();
+            OpenPicandArc2 = new Button();
             ClearPic = new Button();
             tableLayoutPanel2 = new TableLayoutPanel();
             FittoReViewButton = new Button();
             panel2 = new Panel();
             LinkView = new Button();
-            ToLeft = new Button();
-            ToRight = new Button();
+            ClearBrush = new Button();
+            BrushButton = new Button();
             panel3 = new Panel();
             label1 = new Label();
+            panel4 = new Panel();
+            ShowShotScreen = new Button();
             ScreenShotFolderbutton = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
@@ -61,16 +67,19 @@
             ((System.ComponentModel.ISupportInitialize)PicReview2_Placeholder).BeginInit();
             tableLayoutPanel1.SuspendLayout();
             panel1.SuspendLayout();
+            panel5.SuspendLayout();
+            panel6.SuspendLayout();
             tableLayoutPanel2.SuspendLayout();
             panel2.SuspendLayout();
             panel3.SuspendLayout();
+            panel4.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
             // 
             splitContainer1.Dock = DockStyle.Fill;
             splitContainer1.IsSplitterFixed = true;
-            splitContainer1.Location = new Point(0, 50);
+            splitContainer1.Location = new Point(0, 60);
             splitContainer1.Name = "splitContainer1";
             // 
             // splitContainer1.Panel1
@@ -80,7 +89,7 @@
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(PicReview2_Placeholder);
-            splitContainer1.Size = new Size(800, 350);
+            splitContainer1.Size = new Size(800, 340);
             splitContainer1.SplitterDistance = 400;
             splitContainer1.TabIndex = 2;
             // 
@@ -91,7 +100,7 @@
             PicReview1_Placeholder.Dock = DockStyle.Fill;
             PicReview1_Placeholder.Location = new Point(0, 0);
             PicReview1_Placeholder.Name = "PicReview1_Placeholder";
-            PicReview1_Placeholder.Size = new Size(400, 350);
+            PicReview1_Placeholder.Size = new Size(400, 340);
             PicReview1_Placeholder.TabIndex = 0;
             PicReview1_Placeholder.TabStop = false;
             PicReview1_Placeholder.Click += PicView_Click;
@@ -107,7 +116,7 @@
             PicReview2_Placeholder.Dock = DockStyle.Fill;
             PicReview2_Placeholder.Location = new Point(0, 0);
             PicReview2_Placeholder.Name = "PicReview2_Placeholder";
-            PicReview2_Placeholder.Size = new Size(396, 350);
+            PicReview2_Placeholder.Size = new Size(396, 340);
             PicReview2_Placeholder.TabIndex = 0;
             PicReview2_Placeholder.TabStop = false;
             PicReview2_Placeholder.Click += PicView_Click;
@@ -127,21 +136,21 @@
             tableLayoutPanel1.Controls.Add(ChangePic2, 4, 0);
             tableLayoutPanel1.Controls.Add(panel1, 2, 0);
             tableLayoutPanel1.Controls.Add(ChangePic1, 0, 0);
-            tableLayoutPanel1.Controls.Add(OpenFolder2, 3, 0);
-            tableLayoutPanel1.Controls.Add(OpenFolder1, 1, 0);
+            tableLayoutPanel1.Controls.Add(panel5, 1, 0);
+            tableLayoutPanel1.Controls.Add(panel6, 3, 0);
             tableLayoutPanel1.Dock = DockStyle.Top;
             tableLayoutPanel1.Location = new Point(0, 0);
             tableLayoutPanel1.Margin = new Padding(0);
             tableLayoutPanel1.Name = "tableLayoutPanel1";
             tableLayoutPanel1.RowCount = 1;
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel1.Size = new Size(800, 50);
+            tableLayoutPanel1.Size = new Size(800, 60);
             tableLayoutPanel1.TabIndex = 3;
             // 
             // ChangePic2
             // 
             ChangePic2.Dock = DockStyle.Bottom;
-            ChangePic2.Location = new Point(722, 17);
+            ChangePic2.Location = new Point(722, 27);
             ChangePic2.Name = "ChangePic2";
             ChangePic2.Size = new Size(75, 30);
             ChangePic2.TabIndex = 4;
@@ -159,7 +168,7 @@
             panel1.Dock = DockStyle.Fill;
             panel1.Location = new Point(200, 3);
             panel1.Name = "panel1";
-            panel1.Size = new Size(400, 44);
+            panel1.Size = new Size(400, 54);
             panel1.TabIndex = 2;
             // 
             // Showlabel
@@ -179,7 +188,7 @@
             PicNamecomboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             PicNamecomboBox.Font = new Font("Microsoft YaHei UI", 10F);
             PicNamecomboBox.FormattingEnabled = true;
-            PicNamecomboBox.Location = new Point(75, 17);
+            PicNamecomboBox.Location = new Point(75, 27);
             PicNamecomboBox.Name = "PicNamecomboBox";
             PicNamecomboBox.Size = new Size(175, 27);
             PicNamecomboBox.TabIndex = 1;
@@ -191,7 +200,7 @@
             ScreenShotButton.Dock = DockStyle.Left;
             ScreenShotButton.Location = new Point(0, 0);
             ScreenShotButton.Name = "ScreenShotButton";
-            ScreenShotButton.Size = new Size(75, 44);
+            ScreenShotButton.Size = new Size(75, 54);
             ScreenShotButton.TabIndex = 0;
             ScreenShotButton.Text = "截图(Q)";
             ScreenShotButton.UseVisualStyleBackColor = true;
@@ -202,7 +211,7 @@
             LastPic.Dock = DockStyle.Right;
             LastPic.Location = new Point(250, 0);
             LastPic.Name = "LastPic";
-            LastPic.Size = new Size(75, 44);
+            LastPic.Size = new Size(75, 54);
             LastPic.TabIndex = 3;
             LastPic.Text = "上一张";
             LastPic.UseVisualStyleBackColor = true;
@@ -213,7 +222,7 @@
             NextPic.Dock = DockStyle.Right;
             NextPic.Location = new Point(325, 0);
             NextPic.Name = "NextPic";
-            NextPic.Size = new Size(75, 44);
+            NextPic.Size = new Size(75, 54);
             NextPic.TabIndex = 2;
             NextPic.Text = "下一张";
             NextPic.UseVisualStyleBackColor = true;
@@ -222,7 +231,7 @@
             // ChangePic1
             // 
             ChangePic1.Dock = DockStyle.Bottom;
-            ChangePic1.Location = new Point(3, 17);
+            ChangePic1.Location = new Point(3, 27);
             ChangePic1.Name = "ChangePic1";
             ChangePic1.Size = new Size(75, 30);
             ChangePic1.TabIndex = 3;
@@ -230,27 +239,73 @@
             ChangePic1.UseVisualStyleBackColor = true;
             ChangePic1.Click += ChangePic1_Click;
             // 
-            // OpenFolder2
+            // panel5
             // 
-            OpenFolder2.Dock = DockStyle.Right;
-            OpenFolder2.Location = new Point(636, 3);
-            OpenFolder2.Name = "OpenFolder2";
-            OpenFolder2.Size = new Size(80, 44);
-            OpenFolder2.TabIndex = 5;
-            OpenFolder2.Text = "导入图片";
-            OpenFolder2.UseVisualStyleBackColor = true;
-            OpenFolder2.Click += OpenFolder2_Click;
+            panel5.Controls.Add(Openfolder1);
+            panel5.Controls.Add(OpenPicandArc1);
+            panel5.Dock = DockStyle.Left;
+            panel5.Location = new Point(81, 0);
+            panel5.Margin = new Padding(0);
+            panel5.Name = "panel5";
+            panel5.Size = new Size(116, 60);
+            panel5.TabIndex = 6;
             // 
-            // OpenFolder1
+            // Openfolder1
             // 
-            OpenFolder1.Dock = DockStyle.Left;
-            OpenFolder1.Location = new Point(84, 3);
-            OpenFolder1.Name = "OpenFolder1";
-            OpenFolder1.Size = new Size(80, 44);
-            OpenFolder1.TabIndex = 6;
-            OpenFolder1.Text = "导入图片";
-            OpenFolder1.UseVisualStyleBackColor = true;
-            OpenFolder1.Click += OpenFolder1_Click;
+            Openfolder1.Dock = DockStyle.Fill;
+            Openfolder1.Location = new Point(0, 30);
+            Openfolder1.Margin = new Padding(0);
+            Openfolder1.Name = "Openfolder1";
+            Openfolder1.Size = new Size(116, 30);
+            Openfolder1.TabIndex = 7;
+            Openfolder1.Text = "选择文件夹";
+            Openfolder1.UseVisualStyleBackColor = true;
+            Openfolder1.Click += Openfolder1_Click_1;
+            // 
+            // OpenPicandArc1
+            // 
+            OpenPicandArc1.Dock = DockStyle.Top;
+            OpenPicandArc1.Location = new Point(0, 0);
+            OpenPicandArc1.Margin = new Padding(0);
+            OpenPicandArc1.Name = "OpenPicandArc1";
+            OpenPicandArc1.Size = new Size(116, 30);
+            OpenPicandArc1.TabIndex = 6;
+            OpenPicandArc1.Text = "选择图片/压缩包";
+            OpenPicandArc1.UseVisualStyleBackColor = true;
+            OpenPicandArc1.Click += OpenPicandArc1_Click;
+            // 
+            // panel6
+            // 
+            panel6.Controls.Add(Openfolder2);
+            panel6.Controls.Add(OpenPicandArc2);
+            panel6.Dock = DockStyle.Right;
+            panel6.Location = new Point(603, 0);
+            panel6.Margin = new Padding(0);
+            panel6.Name = "panel6";
+            panel6.Size = new Size(116, 60);
+            panel6.TabIndex = 7;
+            // 
+            // Openfolder2
+            // 
+            Openfolder2.Dock = DockStyle.Fill;
+            Openfolder2.Location = new Point(0, 30);
+            Openfolder2.Name = "Openfolder2";
+            Openfolder2.Size = new Size(116, 30);
+            Openfolder2.TabIndex = 6;
+            Openfolder2.Text = "选择文件夹";
+            Openfolder2.UseVisualStyleBackColor = true;
+            Openfolder2.Click += Openfolder2_Click_1;
+            // 
+            // OpenPicandArc2
+            // 
+            OpenPicandArc2.Dock = DockStyle.Top;
+            OpenPicandArc2.Location = new Point(0, 0);
+            OpenPicandArc2.Name = "OpenPicandArc2";
+            OpenPicandArc2.Size = new Size(116, 30);
+            OpenPicandArc2.TabIndex = 5;
+            OpenPicandArc2.Text = "选择图片/压缩包";
+            OpenPicandArc2.UseVisualStyleBackColor = true;
+            OpenPicandArc2.Click += OpenPicandArc2_Click;
             // 
             // ClearPic
             // 
@@ -275,7 +330,7 @@
             tableLayoutPanel2.Controls.Add(panel2, 2, 0);
             tableLayoutPanel2.Controls.Add(panel3, 4, 0);
             tableLayoutPanel2.Controls.Add(label1, 3, 0);
-            tableLayoutPanel2.Controls.Add(ScreenShotFolderbutton, 1, 0);
+            tableLayoutPanel2.Controls.Add(panel4, 1, 0);
             tableLayoutPanel2.Dock = DockStyle.Bottom;
             tableLayoutPanel2.Location = new Point(0, 400);
             tableLayoutPanel2.Name = "tableLayoutPanel2";
@@ -298,8 +353,8 @@
             // panel2
             // 
             panel2.Controls.Add(LinkView);
-            panel2.Controls.Add(ToLeft);
-            panel2.Controls.Add(ToRight);
+            panel2.Controls.Add(ClearBrush);
+            panel2.Controls.Add(BrushButton);
             panel2.Location = new Point(270, 3);
             panel2.Name = "panel2";
             panel2.Size = new Size(260, 44);
@@ -316,27 +371,27 @@
             LinkView.UseVisualStyleBackColor = true;
             LinkView.Click += LinkView_Click;
             // 
-            // ToLeft
+            // ClearBrush
             // 
-            ToLeft.Dock = DockStyle.Right;
-            ToLeft.Location = new Point(170, 0);
-            ToLeft.Name = "ToLeft";
-            ToLeft.Size = new Size(90, 44);
-            ToLeft.TabIndex = 3;
-            ToLeft.Text = "给左图定位";
-            ToLeft.UseVisualStyleBackColor = true;
-            ToLeft.Click += ToLeft_Click;
+            ClearBrush.Dock = DockStyle.Right;
+            ClearBrush.Location = new Point(170, 0);
+            ClearBrush.Name = "ClearBrush";
+            ClearBrush.Size = new Size(90, 44);
+            ClearBrush.TabIndex = 3;
+            ClearBrush.Text = "清空笔迹";
+            ClearBrush.UseVisualStyleBackColor = true;
+            ClearBrush.Click += ClearBrush_Click;
             // 
-            // ToRight
+            // BrushButton
             // 
-            ToRight.Dock = DockStyle.Left;
-            ToRight.Location = new Point(0, 0);
-            ToRight.Name = "ToRight";
-            ToRight.Size = new Size(90, 44);
-            ToRight.TabIndex = 2;
-            ToRight.Text = "给右图定位";
-            ToRight.UseVisualStyleBackColor = true;
-            ToRight.Click += ToRight_Click;
+            BrushButton.Dock = DockStyle.Left;
+            BrushButton.Location = new Point(0, 0);
+            BrushButton.Name = "BrushButton";
+            BrushButton.Size = new Size(90, 44);
+            BrushButton.TabIndex = 2;
+            BrushButton.Text = "画图(F)";
+            BrushButton.UseVisualStyleBackColor = true;
+            BrushButton.Click += BrushButton_Click;
             // 
             // panel3
             // 
@@ -358,10 +413,32 @@
             label1.TabIndex = 3;
             label1.Text = "导入图片支持多选，支持导入.zip/.7z/.rar压缩包\r\n若要选择文件夹，请点进文件夹后全选图片";
             // 
+            // panel4
+            // 
+            panel4.BackColor = SystemColors.Info;
+            panel4.Controls.Add(ShowShotScreen);
+            panel4.Controls.Add(ScreenShotFolderbutton);
+            panel4.Location = new Point(84, 3);
+            panel4.Name = "panel4";
+            panel4.Size = new Size(180, 44);
+            panel4.TabIndex = 5;
+            // 
+            // ShowShotScreen
+            // 
+            ShowShotScreen.Dock = DockStyle.Left;
+            ShowShotScreen.Location = new Point(103, 0);
+            ShowShotScreen.Name = "ShowShotScreen";
+            ShowShotScreen.Size = new Size(75, 44);
+            ShowShotScreen.TabIndex = 6;
+            ShowShotScreen.Text = "编辑截图";
+            ShowShotScreen.UseVisualStyleBackColor = true;
+            ShowShotScreen.MouseEnter += ShowShotScreen_MouseEnter;
+            ShowShotScreen.MouseLeave += ShowShotScreen_MouseLeave;
+            // 
             // ScreenShotFolderbutton
             // 
             ScreenShotFolderbutton.Dock = DockStyle.Left;
-            ScreenShotFolderbutton.Location = new Point(84, 3);
+            ScreenShotFolderbutton.Location = new Point(0, 0);
             ScreenShotFolderbutton.Name = "ScreenShotFolderbutton";
             ScreenShotFolderbutton.Size = new Size(103, 44);
             ScreenShotFolderbutton.TabIndex = 5;
@@ -393,10 +470,13 @@
             tableLayoutPanel1.ResumeLayout(false);
             panel1.ResumeLayout(false);
             panel1.PerformLayout();
+            panel5.ResumeLayout(false);
+            panel6.ResumeLayout(false);
             tableLayoutPanel2.ResumeLayout(false);
             tableLayoutPanel2.PerformLayout();
             panel2.ResumeLayout(false);
             panel3.ResumeLayout(false);
+            panel4.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -409,14 +489,14 @@
         private Panel panel1;
         private Button ClearPic;
         private Button FittoReViewButton;
-        private Button ToRight;
+        private Button BrushButton;
         private Panel panel2;
         private Button LinkView;
-        private Button ToLeft;
+        private Button ClearBrush;
         private Button ChangePic2;
         private Button ChangePic1;
-        private Button OpenFolder2;
-        private Button OpenFolder1;
+        private Button OpenPicandArc2;
+        private Button OpenPicandArc1;
         private Button LastPic;
         private Button NextPic;
         private Panel panel3;
@@ -425,5 +505,11 @@
         private Button ScreenShotFolderbutton;
         private PictureBox PicReview1_Placeholder;
         private PictureBox PicReview2_Placeholder;
+        private Panel panel4;
+        private Button ShowShotScreen;
+        private Panel panel5;
+        private Button Openfolder1;
+        private Panel panel6;
+        private Button Openfolder2;
     }
 }
