@@ -52,13 +52,12 @@
             FittoReViewButton = new Button();
             panel2 = new Panel();
             LinkView = new Button();
-            ClearBrush = new Button();
-            BrushButton = new Button();
             panel3 = new Panel();
             label1 = new Label();
             panel4 = new Panel();
-            ShowShotScreen = new Button();
+            label2 = new Label();
             ScreenShotFolderbutton = new Button();
+            ShowShotScreen = new PictureBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -73,6 +72,7 @@
             panel2.SuspendLayout();
             panel3.SuspendLayout();
             panel4.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)ShowShotScreen).BeginInit();
             SuspendLayout();
             // 
             // splitContainer1
@@ -353,45 +353,21 @@
             // panel2
             // 
             panel2.Controls.Add(LinkView);
-            panel2.Controls.Add(ClearBrush);
-            panel2.Controls.Add(BrushButton);
-            panel2.Location = new Point(270, 3);
+            panel2.Location = new Point(355, 3);
             panel2.Name = "panel2";
-            panel2.Size = new Size(260, 44);
+            panel2.Size = new Size(90, 44);
             panel2.TabIndex = 3;
             // 
             // LinkView
             // 
             LinkView.Dock = DockStyle.Fill;
-            LinkView.Location = new Point(90, 0);
+            LinkView.Location = new Point(0, 0);
             LinkView.Name = "LinkView";
-            LinkView.Size = new Size(80, 44);
+            LinkView.Size = new Size(90, 44);
             LinkView.TabIndex = 4;
             LinkView.Text = "同步显示";
             LinkView.UseVisualStyleBackColor = true;
             LinkView.Click += LinkView_Click;
-            // 
-            // ClearBrush
-            // 
-            ClearBrush.Dock = DockStyle.Right;
-            ClearBrush.Location = new Point(170, 0);
-            ClearBrush.Name = "ClearBrush";
-            ClearBrush.Size = new Size(90, 44);
-            ClearBrush.TabIndex = 3;
-            ClearBrush.Text = "清空笔迹";
-            ClearBrush.UseVisualStyleBackColor = true;
-            ClearBrush.Click += ClearBrush_Click;
-            // 
-            // BrushButton
-            // 
-            BrushButton.Dock = DockStyle.Left;
-            BrushButton.Location = new Point(0, 0);
-            BrushButton.Name = "BrushButton";
-            BrushButton.Size = new Size(90, 44);
-            BrushButton.TabIndex = 2;
-            BrushButton.Text = "画图(F)";
-            BrushButton.UseVisualStyleBackColor = true;
-            BrushButton.Click += BrushButton_Click;
             // 
             // panel3
             // 
@@ -407,44 +383,59 @@
             // 
             label1.AutoSize = true;
             label1.Dock = DockStyle.Right;
-            label1.Location = new Point(540, 0);
+            label1.Location = new Point(558, 0);
             label1.Name = "label1";
-            label1.Size = new Size(176, 50);
+            label1.Size = new Size(158, 50);
             label1.TabIndex = 3;
-            label1.Text = "导入图片支持多选，支持导入.zip/.7z/.rar压缩包\r\n若要选择文件夹，请点进文件夹后全选图片";
+            label1.Text = "支持多选图片\r\n支持选择.zip/.7z/.rar压缩包";
+            label1.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // panel4
             // 
             panel4.BackColor = SystemColors.Info;
-            panel4.Controls.Add(ShowShotScreen);
+            panel4.Controls.Add(label2);
             panel4.Controls.Add(ScreenShotFolderbutton);
+            panel4.Controls.Add(ShowShotScreen);
+            panel4.Dock = DockStyle.Fill;
             panel4.Location = new Point(84, 3);
             panel4.Name = "panel4";
-            panel4.Size = new Size(180, 44);
+            panel4.Size = new Size(265, 44);
             panel4.TabIndex = 5;
             // 
-            // ShowShotScreen
+            // label2
             // 
-            ShowShotScreen.Dock = DockStyle.Left;
-            ShowShotScreen.Location = new Point(103, 0);
-            ShowShotScreen.Name = "ShowShotScreen";
-            ShowShotScreen.Size = new Size(75, 44);
-            ShowShotScreen.TabIndex = 6;
-            ShowShotScreen.Text = "编辑截图";
-            ShowShotScreen.UseVisualStyleBackColor = true;
-            ShowShotScreen.MouseEnter += ShowShotScreen_MouseEnter;
-            ShowShotScreen.MouseLeave += ShowShotScreen_MouseLeave;
+            label2.Dock = DockStyle.Right;
+            label2.Location = new Point(113, 0);
+            label2.Name = "label2";
+            label2.Size = new Size(56, 44);
+            label2.TabIndex = 9;
+            label2.Text = "左键标注\r\n右键清空";
+            label2.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // ScreenShotFolderbutton
             // 
             ScreenShotFolderbutton.Dock = DockStyle.Left;
             ScreenShotFolderbutton.Location = new Point(0, 0);
             ScreenShotFolderbutton.Name = "ScreenShotFolderbutton";
-            ScreenShotFolderbutton.Size = new Size(103, 44);
+            ScreenShotFolderbutton.Size = new Size(113, 44);
             ScreenShotFolderbutton.TabIndex = 5;
             ScreenShotFolderbutton.Text = "打开截图文件夹";
             ScreenShotFolderbutton.UseVisualStyleBackColor = true;
             ScreenShotFolderbutton.Click += ScreenShotFolderbutton_Click;
+            // 
+            // ShowShotScreen
+            // 
+            ShowShotScreen.BackColor = Color.RoyalBlue;
+            ShowShotScreen.BorderStyle = BorderStyle.FixedSingle;
+            ShowShotScreen.Dock = DockStyle.Right;
+            ShowShotScreen.Location = new Point(169, 0);
+            ShowShotScreen.Name = "ShowShotScreen";
+            ShowShotScreen.Size = new Size(96, 44);
+            ShowShotScreen.SizeMode = PictureBoxSizeMode.Zoom;
+            ShowShotScreen.TabIndex = 8;
+            ShowShotScreen.TabStop = false;
+            ShowShotScreen.MouseEnter += ShowShotScreen_MouseEnter;
+            ShowShotScreen.MouseHover += ShowShotScreen_MouseLeave;
             // 
             // ImageReviewForm
             // 
@@ -459,6 +450,7 @@
             Name = "ImageReviewForm";
             Text = "图校";
             Load += ImageReviewForm_Load;
+            SizeChanged += ImageReviewForm_SizeChanged;
             KeyDown += myKeyDown;
             KeyUp += myKeyUp;
             splitContainer1.Panel1.ResumeLayout(false);
@@ -477,6 +469,7 @@
             panel2.ResumeLayout(false);
             panel3.ResumeLayout(false);
             panel4.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)ShowShotScreen).EndInit();
             ResumeLayout(false);
         }
 
@@ -489,10 +482,8 @@
         private Panel panel1;
         private Button ClearPic;
         private Button FittoReViewButton;
-        private Button BrushButton;
         private Panel panel2;
         private Button LinkView;
-        private Button ClearBrush;
         private Button ChangePic2;
         private Button ChangePic1;
         private Button OpenPicandArc2;
@@ -506,10 +497,11 @@
         private PictureBox PicReview1_Placeholder;
         private PictureBox PicReview2_Placeholder;
         private Panel panel4;
-        private Button ShowShotScreen;
         private Panel panel5;
         private Button Openfolder1;
         private Panel panel6;
         private Button Openfolder2;
+        private PictureBox ShowShotScreen;
+        private Label label2;
     }
 }

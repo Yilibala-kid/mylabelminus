@@ -414,7 +414,7 @@ namespace mylabel
             // 获取当前主题色（只获取一次）
             bool isDark = Modules.ThemeManager.IsDarkMode;
             Color activeBg = Modules.ThemeManager.AccentColor;
-            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : SystemColors.Control;
+            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : Color.OldLace;
             Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
             Color defaultFore = Modules.ThemeManager.TextColor;
 

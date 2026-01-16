@@ -1,8 +1,10 @@
 ﻿using SharpCompress.Archives;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
+using System;
 using System.Data;
 using System.Drawing.Imaging;
+using System.IO;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 
 
@@ -63,7 +65,7 @@ namespace mylabel
         private Point mouseDownLocation;
         private bool isDragging = false;
         private bool isPotentialClick = false; // 用来标记是否可能是点击
-        private bool isLinked = true;
+        private bool isLinked = false;
         private const int ClickThreshold = 5; // 像素阈值
 
 
@@ -72,8 +74,7 @@ namespace mylabel
         private Rectangle ScreenShotRect;           // 当前拉框的矩形区域（屏幕坐标）
         private bool isSelectingRect = false; // 是否正在拉框
         private string currentScreenShotpath = null;
-        private bool isBrushMode = false; // 画笔模式开关
-        private SKPath _currentPath = null; // 当前正在画的线条
+
         private Dictionary<Control, List<SKPath>> _viewPaths = new Dictionary<Control, List<SKPath>>();
         private List<SKPath> GetPathsForControl(Control c)
         {
@@ -152,10 +153,11 @@ namespace mylabel
             // 强制开启 PictureBox 的双缓冲
             var prop = typeof(Control).GetProperty("DoubleBuffered",
                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            // 根据 isLinked 的初始值设置按钮颜色
-            LinkView.BackColor = isLinked ? Color.LightGreen : SystemColors.Control;
 
             Modules.ThemeManager.ApplyTheme(this);
+            // 根据 isLinked 的初始值设置按钮颜色
+            LinkView_Click(null, null);
+            InitPreviewPopup();
         }
         #region 图像绘制
         private void PicView_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
@@ -166,7 +168,11 @@ namespace mylabel
             if (!_viewStates.ContainsKey(pb)) return;
             var state = _viewStates[pb];
             SKCanvas canvas = e.Surface.Canvas;
-            canvas.Clear(SKColors.SeaShell);
+            SKColor backgroundColor = Modules.ThemeManager.IsDarkMode
+                ? SKColor.Parse("#2D2D30")
+                : SKColors.SeaShell;
+            // 2. 清除画布
+            canvas.Clear(backgroundColor);
 
             if (state.Image != null)
             {
@@ -183,25 +189,6 @@ namespace mylabel
 
                     canvas.DrawBitmap(state.Image, 0, 0, paint);
 
-                    var paths = GetPathsForControl(pb); // 只获取当前 pb 的线条
-                    if (paths.Count > 0)
-                    {
-                        using (var pathPaint = new SKPaint
-                        {
-                            Style = SKPaintStyle.Stroke,
-                            Color = SKColors.Red,
-                            StrokeWidth = 3 / state.Scale,
-                            IsAntialias = true,
-                            StrokeCap = SKStrokeCap.Round,
-                            StrokeJoin = SKStrokeJoin.Round
-                        })
-                        {
-                            foreach (var path in paths)
-                            {
-                                canvas.DrawPath(path, pathPaint);
-                            }
-                        }
-                    }
                 }
                 canvas.Restore();
             }
@@ -265,59 +252,7 @@ namespace mylabel
                 }
             }
         }
-        //private void PicView_Paint(object sender, PaintEventArgs e)
-        //{
-        //    if (!(sender is PictureBox currentPic)) return;
-        //    // 从字典获取当前窗口的状态
-        //    if (!_viewStates.ContainsKey(currentPic) || _viewStates[currentPic].Image == null)
-        //    {
-        //        // 如果没图片，可以画一行提示字（可选）
-        //        e.Graphics.DrawString("点击此处加载文件夹", this.Font, Brushes.LightGray, 10, 10);
-        //        return;
-        //    }
 
-        //    var state = _viewStates[currentPic];
-        //    var img = state.Image;
-
-        //    // A. 基础环境设置
-        //    e.Graphics.Clear(Color.SeaShell);
-        //    e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-
-        //    // B. 应用坐标变换
-        //    e.Graphics.TranslateTransform(state.Offset.X, state.Offset.Y);
-        //    e.Graphics.ScaleTransform(state.Scale, state.Scale);
-
-        //    // C. 画图片
-        //    e.Graphics.DrawImage(img,
-        //            new RectangleF(0, 0, img.Width, img.Height),
-        //            new RectangleF(0, 0, img.Width, img.Height),
-        //            GraphicsUnit.Pixel);
-
-        //    if (isScreenShotMode && isSelectingRect)
-        //    {
-        //        // 记得重置变换，因为 ocrRect 是鼠标的屏幕坐标，不需要跟随图片的缩放移动
-        //        e.Graphics.ResetTransform();
-
-        //        // 1. 画一个半透明的黑色遮罩层 (可选，让选区更明显)
-        //        using (Brush overlay = new SolidBrush(Color.FromArgb(100, 0, 0, 0)))
-        //        {
-        //            // 这里可以简单画整个控件背景，或者更高级地只画选区之外的部分
-        //            // e.Graphics.FillRectangle(overlay, PicView.ClientRectangle);
-        //        }
-
-        //        // 2. 画选区边框（虚线红框）
-        //        using (Pen p = new Pen(Color.Red, 2))
-        //        {
-        //            p.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-        //            e.Graphics.DrawRectangle(p, ScreenShotRect);
-        //        }
-
-        //        // 3. (进阶) 在框旁边实时显示宽高像素值
-        //        string sizeText = $"{ScreenShotRect.Width} x {ScreenShotRect.Height}";
-        //        e.Graphics.DrawString(sizeText, this.Font, Brushes.Red, ScreenShotRect.X, ScreenShotRect.Y - 15);
-        //    }
-
-        //}
         #endregion
         #region PicView事件通用逻辑        
         private void PicView_MouseDown(object sender, MouseEventArgs e)
@@ -328,18 +263,6 @@ namespace mylabel
 
             if (e.Button == MouseButtons.Left)
             {
-                // --- 优先判定：画笔模式 ---
-                if (isBrushMode)
-                {
-                    _currentPath = new SKPath();
-                    PointF imgPt = ScreenToImage(pb, e.Location);
-                    _currentPath.MoveTo(imgPt.X, imgPt.Y);
-
-                    // 只添加到当前触发事件的控件列表中
-                    GetPathsForControl(pb).Add(_currentPath);
-                    return;
-                }
-
                 if (isScreenShotMode)
                 {
                     isSelectingRect = true;
@@ -360,15 +283,6 @@ namespace mylabel
             if (!(sender is Control pb) || !_viewStates.ContainsKey(pb)) return;
             var state = _viewStates[pb];
             if (state.Image == null) return;
-
-            // --- 优先判定：画笔模式绘制 ---
-            if (isBrushMode && e.Button == MouseButtons.Left && _currentPath != null)
-            {
-                PointF imgPt = ScreenToImage(pb, e.Location);
-                _currentPath.LineTo(imgPt.X, imgPt.Y);
-                pb.Invalidate(); // 立即触发重绘
-                return;
-            }
 
             // --- 原有模式 1：截图 ---
             if (isScreenShotMode && isSelectingRect)
@@ -408,13 +322,6 @@ namespace mylabel
         private async void PicView_MouseUp(object sender, MouseEventArgs e)
         {
             if (!(sender is Control currentPic)) return;
-
-            // --- 画笔结束 ---
-            if (isBrushMode)
-            {
-                _currentPath = null;
-                return;
-            }
 
             if (e.Button != MouseButtons.Left) return;
 
@@ -640,7 +547,14 @@ namespace mylabel
         private void LinkView_Click(object sender, EventArgs e)
         {
             isLinked = !isLinked;
-            LinkView.BackColor = isLinked ? Color.LightGreen : SystemColors.Control;
+            bool isDark = Modules.ThemeManager.IsDarkMode;
+            Color activeBg = Modules.ThemeManager.AccentColor;
+            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+            Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
+            Color defaultFore = Modules.ThemeManager.TextColor;
+            // 1. UI 视觉反馈
+            LinkView.BackColor = isLinked ? activeBg : defaultBg;
+            LinkView.ForeColor = isLinked ? activeFore : defaultFore;
 
             // 开启瞬间先做一次对齐
             if (isLinked) ToRight_Click(null, null);
@@ -917,7 +831,12 @@ namespace mylabel
         #endregion
 
         #region 按键功能
-        string rawText = "点击此处选择图片/压缩包\nQ(按住)：截图\nA：上一张\nD：下一张\nR：重置显示";
+        string rawText = "点击此处选择图片/压缩包\n" +
+            "Q(按住)：截图\n" +
+            "A：上一张\n" +
+            "D：下一张\n" +
+            "R：重置显示\n" +
+            "截图后可红笔进行标记(清空限当次标记)";
         // 按键按下
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -952,11 +871,6 @@ namespace mylabel
                 // A键截图
                 case Keys.Q:
                     SetScreenShotMode(true);
-                    e.Handled = true;
-                    break;
-
-                case Keys.F:
-                    SetBrushMode(true);
                     e.Handled = true;
                     break;
                 // R 键重置显示
@@ -994,11 +908,6 @@ namespace mylabel
                 case Keys.Q:
                     SetScreenShotMode(false);
                     break;
-
-                case Keys.F:
-                    SetBrushMode(false);
-                    e.Handled = true;
-                    break;
             }
             _isKeyDown = false;
             e.Handled = true;
@@ -1008,11 +917,16 @@ namespace mylabel
         {
             // 避免重复触发：如果状态没变，直接返回
             if (isScreenShotMode == active) return;
-
             isScreenShotMode = active;
 
+            bool isDark = Modules.ThemeManager.IsDarkMode;
+            Color activeBg = Modules.ThemeManager.AccentColor;
+            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+            Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
+            Color defaultFore = Modules.ThemeManager.TextColor;
             // 1. UI 视觉反馈
-            ScreenShotButton.BackColor = isScreenShotMode ? Color.LightGreen : SystemColors.Control;
+            ScreenShotButton.BackColor = active ? activeBg : defaultBg;
+            ScreenShotButton.ForeColor = active ? activeFore : defaultFore;
             ScreenShotButton.Text = isScreenShotMode ? "退出截图" : "截图(Q)";
 
             // 2. 重置拉框状态
@@ -1020,42 +934,6 @@ namespace mylabel
             ScreenShotRect = Rectangle.Empty;
 
             // 3. 刷新视图
-            PicReview1.Invalidate();
-            PicReview2.Invalidate();
-        }
-        private void SetBrushMode(bool active)
-        {
-            // 1. 状态检查
-            if (isBrushMode == active) return;
-
-            isBrushMode = active;
-
-            // 2. 按钮视觉反馈 (假设你的画笔按钮叫 BrushButton)
-            BrushButton.BackColor = isBrushMode ? Color.LightCoral : SystemColors.Control;
-            BrushButton.Text = isBrushMode ? "正在画图..." : "画图(F)";
-
-            // 3. 鼠标指针反馈：画图时显示十字准心，平时显示默认箭头
-            Cursor brushCursor = isBrushMode ? Cursors.Cross : Cursors.Default;
-            PicReview1.Cursor = brushCursor;
-            PicReview2.Cursor = brushCursor;
-
-            // 4. 重置正在画的路径（防止状态卡死）
-            if (!isBrushMode) _currentPath = null;
-
-            // 5. 刷新（可选，如果需要即时隐藏/显示笔迹）
-            // PicReview1.Invalidate();
-        }
-
-        private void BrushButton_Click(object sender, EventArgs e)
-        {
-            SetBrushMode(!isBrushMode);
-        }
-        private void ClearBrush_Click(object sender, EventArgs e)
-        {
-            // 清空所有存储的路径
-            _viewPaths.Clear();
-
-            // 强制重绘两个视图
             PicReview1.Invalidate();
             PicReview2.Invalidate();
         }
@@ -1238,7 +1116,7 @@ namespace mylabel
             {
                 encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
                 bmp.Save(path, jpegCodec, encoderParams);
-
+                this.BeginInvoke(new Action(() => UpdateThumbnail(path)));
                 FileInfo fi = new FileInfo(path);
                 if (fi.Length <= targetSize || quality <= 20) // 如果小于1MB 或 质量已经降到20%则停止
                 {
@@ -1280,14 +1158,25 @@ namespace mylabel
             };
             // --- 初始化计时器 ---
             closeTimer = new System.Windows.Forms.Timer();
-            closeTimer.Interval = 1000; // 2秒
+            closeTimer.Interval = 500; // 0.5秒
             closeTimer.Tick += (s, e) =>
             {
-                closeTimer.Stop();
-                if (!isDrawing)
-                { // 如果正在画画，不强制关闭
-                    SaveAndHidePopup();
+                // 获取当前鼠标相对于屏幕的坐标
+                Point mousePos = Control.MousePosition;
+
+                // 检查鼠标是否在 PictureBox 内
+                bool inButton = ShowShotScreen.Bounds.Contains(ShowShotScreen.Parent.PointToClient(mousePos));
+                // 检查鼠标是否在 预览窗 内
+                bool inPopup = previewPopup.Bounds.Contains(mousePos);
+
+                if (inButton || inPopup || isDrawing)
+                {
+                    // 鼠标还在范围内，或者正在画画，不关闭，重新计时或停止
+                    return;
                 }
+
+                closeTimer.Stop();
+                SaveAndHidePopup();
             };
             // 预览窗的事件：鼠标进入取消倒计时，离开启动倒计时
 
@@ -1319,7 +1208,18 @@ namespace mylabel
                 // 只有当窗口可见且没在画画时才启动倒计时
                 if (previewPopup.Visible && !isDrawing) closeTimer.Start();
             };
+            glControl.MouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    ResetDoodles();
+                }
+            };
             previewPopup.Controls.Add(glControl);
+            previewPopup.Opacity = 0;
+            previewPopup.Show();
+            previewPopup.Hide();
+            previewPopup.Opacity = 1;
         }
         private void SaveAndHidePopup()
         {
@@ -1341,7 +1241,7 @@ namespace mylabel
 
                         // 2. 保存到原文件
                         File.WriteAllBytes(currentScreenShotpath, bytes);
-
+                        this.BeginInvoke(new Action(() => UpdateThumbnail(currentScreenShotpath)));
                         // 3. 存入剪贴板 (封装在 Try 内，防止剪贴板被其他程序占用)
                         try
                         {
@@ -1372,8 +1272,6 @@ namespace mylabel
         // --- 鼠标进入按钮：显示并准备画布 ---
         private void ShowShotScreen_MouseEnter(object sender, EventArgs e)
         {
-
-
             if (!File.Exists(currentScreenShotpath)) return;
 
             InitPreviewPopup();
@@ -1405,20 +1303,22 @@ namespace mylabel
                 previewPopup.Size = new Size((int)(imgW * scale), (int)(imgH * scale));
 
                 // 3. 定位（保持在按钮上方，且不超出屏幕顶部）
-                Control btn = (Control)sender;
-                Point btnPos = btn.PointToScreen(Point.Empty);
-                int posX = btnPos.X;
-                int posY = btnPos.Y - previewPopup.Height - 10;
+                Rectangle mainFormRect = this.RectangleToScreen(this.ClientRectangle);
+                int posX = mainFormRect.Left + (mainFormRect.Width - previewPopup.Width) / 2;// 2. 计算 X 坐标：主窗体中心点 - 预览窗宽度的一半
+                int margin = 50; // 距离底部的间距
+                int posY = mainFormRect.Bottom - previewPopup.Height - margin;// 3. 计算 Y 坐标：主窗体底部 - 预览窗高度 - 边距
 
-                // 如果上方空间不够，就显示在按钮下方
-                if (posY < workingArea.Top)
-                {
-                    posY = btnPos.Y + btn.Height + 10;
-                }
+                // 4. 安全检查：确保不超出屏幕可见区域（WorkingArea）
+                if (posX < workingArea.Left) posX = workingArea.Left;
+                if (posX + previewPopup.Width > workingArea.Right) posX = workingArea.Right - previewPopup.Width;
+                if (posY + previewPopup.Height > workingArea.Bottom) posY = workingArea.Bottom - previewPopup.Height;
+
                 previewPopup.Location = new Point(posX, posY);
 
-                previewPopup.Show();
+
                 glControl.Invalidate();
+                previewPopup.Show();
+
             }
         }
         private void ShowShotScreen_MouseLeave(object sender, EventArgs e)
@@ -1462,7 +1362,6 @@ namespace mylabel
 
         private void GlControl_MouseUp(object sender, MouseEventArgs e) => isDrawing = false;
 
-        // --- 坐标映射 (适配 Zoom 模式) ---
         private SKPoint GetImagePoint(int x, int y)
         {
             float cw = glControl.CanvasSize.Width;
@@ -1472,7 +1371,7 @@ namespace mylabel
             float oy = (ch - baseBitmap.Height * ratio) / 2;
             return new SKPoint((x * (float)glControl.CanvasSize.Width / glControl.Width - ox) / ratio,
                                (y * (float)glControl.CanvasSize.Height / glControl.Height - oy) / ratio);
-        }
+        }// --- 坐标映射 (适配 Zoom 模式) ---
 
         private void GlControl_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
         {
@@ -1485,9 +1384,48 @@ namespace mylabel
             float dy = (glControl.CanvasSize.Height / ratio - baseBitmap.Height) / 2;
             canvas.DrawBitmap(baseBitmap, dx, dy);
         }
+
+        private void ResetDoodles()
+        {
+            if (string.IsNullOrEmpty(currentScreenShotpath) || !File.Exists(currentScreenShotpath)) return;
+
+            // 1. 释放当前正在被涂鸦的资源
+            drawingCanvas?.Dispose();
+            baseBitmap?.Dispose();
+
+            // 2. 重新从原始文件加载干净的图片
+            baseBitmap = SKBitmap.Decode(currentScreenShotpath);
+            drawingCanvas = new SKCanvas(baseBitmap);
+
+            // 3. 通知 GPU 控件重新渲染
+            glControl?.Invalidate();
+        }
+        private void UpdateThumbnail(string imagePath)
+        {
+            if (!File.Exists(imagePath)) return;
+
+            try
+            {
+                // 使用流读取，防止文件被 PictureBox 锁定导致无法编辑保存
+                using (FileStream fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
+                {
+                    // 释放旧图片资源
+                    ShowShotScreen.Image?.Dispose();
+                    ShowShotScreen.Image = Image.FromStream(fs);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("缩略图更新失败: " + ex.Message);
+            }
+        }
         #endregion
 
 
 
+        private void ImageReviewForm_SizeChanged(object sender, EventArgs e)
+        {
+            FittoReViewButton_Click(null, null);
+        }
     }
 }
