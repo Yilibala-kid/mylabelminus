@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 
 public class ViewModelBase : INotifyPropertyChanged
@@ -18,156 +19,137 @@ public class ViewModelBase : INotifyPropertyChanged
 public class ImageInfo : ViewModelBase
 {
     private string _imageName = string.Empty;
-    public string ImageName { get => _imageName; set => SetProperty(ref _imageName, value); }
     public BindingList<ImageLabel> Labels { get; set; } = new BindingList<ImageLabel>();// 该图片下的所有标注（子节点）
-
     private bool _isRefreshing = false; // 锁：防止递归
-    public ImageInfo()
-    {
-        // 自动管理索引：当列表发生增删、重排时自动更新 Index
-        Labels.ListChanged += (s, e) =>
-        {
-            // 关键点 1：如果是 Reset 类型，通常说明是我们自己刚刷新完，直接跳过
-            if (_isRefreshing || e.ListChangedType == ListChangedType.Reset) return;
+    public string ImageName { get => _imageName; set => SetProperty(ref _imageName, value); }
+    [Browsable(false)]
+    public List<ImageLabel> ActiveLabels => Labels.Where(l => !l.IsDeleted).ToList();
 
-            // 关键点 2：仅对增、删、移动进行序号刷新
-            if (e.ListChangedType == ListChangedType.ItemAdded ||
-                e.ListChangedType == ListChangedType.ItemDeleted ||
-                e.ListChangedType == ListChangedType.ItemMoved)
-            {
-                RefreshIndices();
-            }
-        };
-    }
+    public ImageInfo()
+        {
+            Labels.ListChanged += (s, e) => {
+                if (!_isRefreshing && e.ListChangedType is ListChangedType.ItemAdded or ListChangedType.ItemDeleted or ListChangedType.ItemMoved)
+                    RefreshIndices();
+            };
+        }
+
     public void RefreshIndices()
     {
-        if (_isRefreshing) return;
         _isRefreshing = true;
-
-        // 暂时关闭事件通知
-        var oldRaiseEvents = Labels.RaiseListChangedEvents;
         Labels.RaiseListChangedEvents = false;
 
-        try
-        {
-            for (int i = 0; i < Labels.Count; i++)
-            {
-                // 只有当序号真的变了才赋值，减少 PropertyChanged 触发
-                if (Labels[i].Index != i + 1)
-                    Labels[i].Index = i + 1;
-            }
-        }
-        finally
-        {
-            Labels.RaiseListChangedEvents = oldRaiseEvents;
-            _isRefreshing = false;
+        int nextIndex = 1;
 
-            // 只有在确定需要 UI 刷新时才调用
-            if (oldRaiseEvents)
-            {
-                Labels.ResetBindings();
-            }
+        // 1. 先给没删除的标签分配连续序号
+        var activeLabels = Labels.Where(l => !l.IsDeleted).OrderBy(l => l.Index).ToList();
+        foreach (var lbl in activeLabels)
+        {
+            lbl.Index = nextIndex++;
         }
+
+        // 2. 给已删除的标签分配一个较大的序号（可选，方便导出时排序）
+        var deletedLabels = Labels.Where(l => l.IsDeleted);
+        foreach (var lbl in deletedLabels)
+        {
+            // 可以设为 999 或者保持原样，但建议递增以防导出 Diff 时乱序
+            lbl.Index = nextIndex++;
+        }
+
+        Labels.RaiseListChangedEvents = true;
+        Labels.ResetBindings();
+        _isRefreshing = false;
+    }
+    public void ResetModificationFlags()
+    {
+        foreach (var l in Labels) l.IsModified = false;
     }
 
-    public void AddLabel(ImageLabel label)
-    {
-        // 因为你已经在构造函数里写了 Labels.ListChanged 监听
-        // 所以这里只需要简单 Add，RefreshIndices 会自动被触发
-        Labels.Add(label);
-    }
-    public ImageLabel AddLabelFromPixels(float x, float y, float w, float h, int imgW, int imgH)
-    {
-        var label = new ImageLabel
-        {
-            Position = new BoundingBox(x / imgW, y / imgH, w / imgW, h / imgH)
-        };
-        Labels.Add(label);
-        return label;
-    }// 快捷添加方法：直接传入像素坐标和图像尺寸，内部自动转为归一化比例
 }
 public class ImageLabel : ViewModelBase
 {
+    #region 基本属性
     private int _index;
     private string _text = "";
-    private double _fontSize = 12.0;
+    private string _originalText = ""; // 存储原文
+    private double _fontSize = 20.0;
     private string _fontFamily = "微软雅黑";
     private string _group = "框内";
     private string _remark = "这是备注";
     private BoundingBox _position = BoundingBox.Default;
+    private bool _isModified = false;
+    private bool _isDeleted = false;
 
-    [DisplayName("序号")]
-    [ReadOnly(true)]
-    public int Index { get => _index; set => SetProperty(ref _index, value); }
-
-    [DisplayName("文本内容")]
-    public string Text { get => _text; set => SetProperty(ref _text, value); }
-
-    [DisplayName("分组")]
-    public string Group { get => _group; set => SetProperty(ref _group, value); }
-
-    [DisplayName("位置")]
-    public BoundingBox Position
+    public void LoadBaseContent(string text)// 初始化时调用，设定原文且不触发 Modified
     {
-        get => _position;
-        set => SetProperty(ref _position, value); // 仅执行基础赋值
+        _originalText = text;
+        _text = text;
+        _isModified = false;
+        OnPropertyChanged(nameof(Text));
     }
-    [Browsable(false)]
-    public float X
+    [DisplayName("序号")] public int Index { get => _index; set => SetProperty(ref _index, value); }
+
+    
+    [DisplayName("文本内容")] public string Text
     {
-        get => _position.X;
+        get => _text;
         set
         {
-            float clampedValue = Math.Clamp(value, 0, 1);
-            if (_position.X == clampedValue) return;
-
-            _position = _position with { X = clampedValue };
-            OnPropertyChanged(); // 仅通知 X 改变
-            OnPropertyChanged(nameof(Position)); // 通知整体改变
+            if (SetProperty(ref _text, value))
+            {
+                IsModified = true; // 仅在这里标记
+            }
         }
     }
-
-    [Browsable(false)]
-    public float Y
+    [DisplayName("分组")]public string Group { get => _group; set => SetProperty(ref _group, value); }
+    [DisplayName("位置")] public BoundingBox Position { get => _position; set => SetProperty(ref _position, value); }
+    private void UpdatePos(Func<BoundingBox, BoundingBox> updater, [CallerMemberName] string prop = "")
     {
-        get => _position.Y;
-        set
-        {
-            float clampedValue = Math.Clamp(value, 0, 1);
-            if (_position.Y == clampedValue) return;
+        var newVal = updater(_position);
+        if (EqualityComparer<BoundingBox>.Default.Equals(_position, newVal)) return;
+        _position = newVal;
+        OnPropertyChanged(prop);
+        OnPropertyChanged(nameof(Position));
+    }
+    [Browsable(false)] public float X { get => _position.X; set => UpdatePos(p => p with { X = Math.Clamp(value, 0, 1) }); }
+    [Browsable(false)] public float Y { get => _position.Y; set => UpdatePos(p => p with { Y = Math.Clamp(value, 0, 1) }); }
+    [Browsable(false)] public float Width { get => _position.Width; set => UpdatePos(p => p with { Width = value }); }
+    [Browsable(false)] public float Height { get => _position.Height; set => UpdatePos(p => p with { Height = value }); }
 
-            _position = _position with { Y = clampedValue };
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(Position));
-        }
-    }
-    [Browsable(false)]
-    public float Width
-    {
-        get => _position.Width;
-        set
-        {
-            if (_position.Width == value) return;
-            _position = _position with { Width = value };
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(Position));
-        }
-    }
-    [Browsable(false)] 
-    public float Height
-    {
-        get => _position.Height;
-        set
-        {
-            if (_position.Height == value) return;
-            _position = _position with { Height = value };
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(Position));
-        }
-    }
     [DisplayName("字号")] public double FontSize { get => _fontSize; set => SetProperty(ref _fontSize, value); }
     [DisplayName("字体")] public string FontFamily { get => _fontFamily; set => SetProperty(ref _fontFamily, value); }
     [DisplayName("备注")] public string Remark { get => _remark; set => SetProperty(ref _remark, value); }
+
+    #endregion
+
+    #region 修改label
+    [Browsable(false)]
+    public bool IsDeleted
+    {
+        get => _isDeleted;
+        set => SetProperty(ref _isDeleted, value);
+    }
+
+    // 修改 IsModified 的逻辑：如果被标记删除，也属于已修改
+    [Browsable(false)]
+    public bool IsModified
+    {
+        get => _isModified || _isDeleted;
+        set => SetProperty(ref _isModified, value);
+    }
+    public string OriginalText => _originalText;
+
+    // 封装一个方法：如果是用户手动修改，则标记为已修改
+    protected new bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = null)
+    {
+        bool changed = base.SetProperty(ref storage, value, propertyName);
+        // 关键逻辑：除了 Index 变化外，其他属性变化都视为“已修改”
+        if (changed && propertyName != nameof(Index) && propertyName != nameof(IsModified))
+        {
+            IsModified = true;
+        }
+        return changed;
+    }
+    #endregion
     public ImageLabel Clone() => (ImageLabel)this.MemberwiseClone();
 
 }

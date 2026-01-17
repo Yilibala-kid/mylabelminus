@@ -864,7 +864,7 @@ namespace mylabel
         {
             if (_isKeyDown) return; // 防止按键重复触发
             _isKeyDown = true;
-            bool hasItems = PicNamecomboBox.Items.Count > 0;// 如果列表为空，方向键逻辑不执行，但 'A' 键截图模式仍可执行
+            bool hasItems = PicNamecomboBox.Items.Count > 0;// 如果列表为空，方向键逻辑不执行
 
             switch (e.KeyCode)
             {
@@ -879,7 +879,7 @@ namespace mylabel
                     ResetView(PicReview2);
                     e.Handled = true;
                     break;
-
+                // S 键显示截图
                 // Q切换到上一张
                 case Keys.A:
                     if (hasItems)
@@ -1267,6 +1267,8 @@ namespace mylabel
                 previewPopup.Hide();
                 baseBitmap?.Dispose();
                 baseBitmap = null;
+                this.Activate();
+                this.Focus();
             }
         }
         // --- 鼠标进入按钮：显示并准备画布 ---
@@ -1318,7 +1320,6 @@ namespace mylabel
 
                 glControl.Invalidate();
                 previewPopup.Show();
-
             }
         }
         private void ShowShotScreen_MouseLeave(object sender, EventArgs e)
@@ -1428,4 +1429,5 @@ namespace mylabel
             FittoReViewButton_Click(null, null);
         }
     }
+
 }

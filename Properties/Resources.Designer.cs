@@ -73,6 +73,16 @@ namespace LabelMinus.Properties {
         /// <summary>
         ///   查找 System.Drawing.Bitmap 类型的本地化资源。
         /// </summary>
+        internal static System.Drawing.Bitmap QQ_1768575693902 {
+            get {
+                object obj = ResourceManager.GetObject("QQ_1768575693902", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查找 System.Drawing.Bitmap 类型的本地化资源。
+        /// </summary>
         internal static System.Drawing.Bitmap 图标 {
             get {
                 object obj = ResourceManager.GetObject("图标", resourceCulture);

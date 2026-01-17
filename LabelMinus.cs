@@ -7,8 +7,10 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text;
 using System.Windows.Forms;
 using System.Xml;
+using static mylabel.Modules.Modules;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using Button = System.Windows.Forms.Button;
@@ -50,7 +52,7 @@ namespace mylabel
         public LabelMinusForm()
         {
             InitializeComponent();
-            
+
 
             Modules.UIHelper.BindFocusTransfer(this, PicView);
         }
@@ -275,7 +277,9 @@ namespace mylabel
                     scale,
                     CurrentSelectedLabel, // 替换 currentSelected 或直接传入
                     dpiScale,
+                    (groupName) => GetColorForGroup(groupName),
                     onlyShowIndex
+                    
                 );
             }
             // --- OCR 模式独有层 ---
@@ -320,7 +324,7 @@ namespace mylabel
             {
                 e.Graphics.ResetTransform();
                 // 在左上角画个小标识，提醒用户正在文校模式
-                e.Graphics.DrawString("● TextReview Mode", this.Font, Brushes.Green, 10, 10);
+                //e.Graphics.DrawString("● TextReview Mode", this.Font, Brushes.Green, 10, 10);
 
             }
 
@@ -660,9 +664,10 @@ namespace mylabel
                 {
                     var label = new ImageLabel
                     {
-                        Position = new BoundingBox { X = imgPt.X / image.Width, Y = imgPt.Y / image.Height }
+                        Position = new BoundingBox { X = imgPt.X / image.Width, Y = imgPt.Y / image.Height },
+                        Group = _currentSelectedGroup // 默认分组
                     };
-                    var cmd = new AddDeleteCommand(CurrentInfo, label, true);
+                    var cmd = new AddDeleteCommand(CurrentInfo, label, true, ApplyFilter);
                     _undoManager.Execute(cmd);
 
                     // 3. UI 选中与快照初始化
@@ -679,12 +684,19 @@ namespace mylabel
                 string filePath = CaptureOCRImageAndGetPath();
                 ShowOCRWebPage(filePath);
 
-                PointF cornerPt = ScreenToImage(new Point(ocrRect.Right, ocrRect.Top));
+                //PointF cornerPt = ScreenToImage(new Point(ocrRect.Right, ocrRect.Top));
 
-                var ocrLabel = CurrentInfo.AddLabelFromPixels(
-                            cornerPt.X, cornerPt.Y, 0, 0, image.Width, image.Height);
+                //var ocrLabel = new ImageLabel
+                //{
+                //    X = cornerPt.X,
+                //    Y = cornerPt.Y,
+                //    Group = _currentSelectedGroup, // 默认分组
+                //    Text = ""      // 等待 OCR 返回或手动输入
+                //};
+                //var cmd = new AddDeleteCommand(CurrentInfo, ocrLabel, true, ApplyFilter);
+                //_undoManager.Execute(cmd);
 
-                imageLabelBindingSource.Position = imageLabelBindingSource.IndexOf(ocrLabel);
+                //imageLabelBindingSource.Position = imageLabelBindingSource.IndexOf(ocrLabel);
             }
         }
         // --- 模式 C: 文校模式释放逻辑 (TextReview) ---
@@ -722,7 +734,7 @@ namespace mylabel
                     _lastSelectedLabel = null;
                     _snapshotBeforeEdit = null;
                 }
-                var cmd = new AddDeleteCommand(CurrentInfo, targetLabel, false);
+                var cmd = new AddDeleteCommand(CurrentInfo, targetLabel, false, ApplyFilter);
                 _undoManager.Execute(cmd);
                 PicView.Invalidate();
             }
@@ -743,182 +755,204 @@ namespace mylabel
         #endregion
 
         #region 菜单栏功能
+
+
+
+        #region 文件栏
         private void NewTranslation_Click(object sender, EventArgs e)
         {
-            using (SaveFileDialog saveFileDialog = new SaveFileDialog())
-            {
-                saveFileDialog.Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*";
-                saveFileDialog.Title = "新建翻译文件";
-                saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            using var sfd = new SaveFileDialog { Filter = "文本文件|*.txt", Title = "新建翻译文件" };
+            if (sfd.ShowDialog() != DialogResult.OK) return;
 
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                {
-                    currentTranslationPath = saveFileDialog.FileName;
-                    currentFolder = Path.GetDirectoryName(currentTranslationPath);
+            File.WriteAllText(sfd.FileName, string.Empty);
 
-                    // 1. 创建空的翻译文件
-                    File.WriteAllText(currentTranslationPath, string.Empty);
+            // 扫描图片直接生成 ImageInfo 序列
+            var infos = Directory.EnumerateFiles(Path.GetDirectoryName(sfd.FileName))
+                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                .Select(f => new ImageInfo { ImageName = Path.GetFileName(f) });
 
-                    // 2. 扫描同文件夹内的图片
-                    var imageFiles = Directory.EnumerateFiles(currentFolder)
-                                               .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()));
-
-                    // 3. 构建新的数据列表 (直接使用 List)
-                    var newList = new List<ImageInfo>();
-                    foreach (var imgPath in imageFiles)
-                    {
-                        newList.Add(new ImageInfo { ImageName = Path.GetFileName(imgPath) });
-                    }
-
-                    // 4. 同步到内存字典（如果你其他地方还要用到 imageDatabase）
-                    imageDatabase = newList.ToDictionary(k => k.ImageName, v => v);
-
-                    // --- 核心改动：刷新 BindingSource ---
-
-                    // 重新挂载数据源，这将自动清空旧 UI 并填充新图片列表
-                    PicNameBindingSource.DataSource = newList;
-
-                    if (PicNameBindingSource.Count > 0)
-                    {
-                        PicNameBindingSource.Position = 0; // 自动触发加载图片和标签
-                        FittoView(null, null);
-                        MessageBox.Show($"文件已新建！\n识别到 {newList.Count} 张图片。", "成功");
-                    }
-                    else
-                    {
-                        MessageBox.Show("文件已新建，但该文件夹内未发现图片。", "提示");
-                        image = null;
-                        PicView.Invalidate();
-                    }
-                }
-            }
+            RefreshImageDatabaseUI(infos, sfd.FileName);
+            MessageBox.Show($"新建成功，识别到 {imageDatabase.Count} 张图片。");
         }
-
         private void OpenTranslation_Click(object sender, EventArgs e)
         {
-            using (OpenFileDialog openFile = new OpenFileDialog())
+            using var ofd = new OpenFileDialog { Filter = "文本文件|*.txt" };
+            if (ofd.ShowDialog() != DialogResult.OK) return;
+
+            try
             {
-                openFile.Filter = "文本文件|*.txt";
-                if (openFile.ShowDialog() == DialogResult.OK)
-                {
-                    try
-                    {
-                        // 解析数据并获取字典
-                        string content = File.ReadAllText(openFile.FileName);
-                        this.imageDatabase = mylabel.Modules.Modules.ParseTextToLabels(content);
-                        // 2. 更新路径
-                        this.currentTranslationPath = openFile.FileName;
-                        this.currentFolder = System.IO.Path.GetDirectoryName(this.currentTranslationPath);
-                        // 3. UI 刷新
-                        PicNameBindingSource.DataSource = imageDatabase.Values.ToList();
+                var db = mylabel.Modules.Modules.ParseTextToLabels(File.ReadAllText(ofd.FileName));
 
-                        // 默认加载第一张图的数据（如果在 ComboBox 中有项）
-                        if (PicName.Items.Count > 0)
-                        {
-                            PicNameBindingSource.Position = 0;
-                            FittoView(null, null);
-                        }
-                        else
-                        {
-                            // 如果文件是空的，清空当前显示
-                            image = null;
-                        }
+                // 统一重置所有 Label 的原始状态
+                foreach (var img in db.Values) img.ResetModificationFlags();
 
-                        //MessageBox.Show($"解析完成，共加载 {imageDatabase.Count} 张图片的标注。");
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("解析失败: " + ex.Message);
-                    }
-                }
+                RefreshImageDatabaseUI(db.Values, ofd.FileName);
+            }
+            catch (Exception ex) { MessageBox.Show("解析失败: " + ex.Message); }
+        }
+        private void SaveTranslation_Click(object sender, EventArgs e) => DoSave(currentTranslationPath);
+        private void SaveAsTranslation_Click(object sender, EventArgs e)
+        {
+            using var sfd = new SaveFileDialog { Filter = "文本文件|*.txt", FileName = Path.GetFileName(currentTranslationPath) };
+            if (sfd.ShowDialog() == DialogResult.OK) DoSave(sfd.FileName, true);
+        }
+        private void DoSave(string path, bool isSaveAs = false)
+        {
+            if (string.IsNullOrEmpty(path)) { MessageBox.Show("路径为空"); return; }
+
+            try
+            {
+                string outputText = mylabel.Modules.Modules.LabelsToText(imageDatabase);
+                File.WriteAllText(path, outputText, Encoding.UTF8);
+
+                if (isSaveAs) RefreshImageDatabaseUI(imageDatabase.Values, path); // 另存为需更新当前路径
+
+                _undoManager.MarkAsSaved();
+                MessageBox.Show("保存成功！");
+            }
+            catch (Exception ex) { MessageBox.Show($"错误：{ex.Message}"); }
+        }
+        private void RefreshImageDatabaseUI(IEnumerable<ImageInfo> source, string path = null)//负责处理字典转列表、绑定数据源和重置状态。
+        {
+            // 1. 同步路径
+            if (!string.IsNullOrEmpty(path))
+            {
+                currentTranslationPath = path;
+                currentFolder = Path.GetDirectoryName(path);
+            }
+
+            // 2. 转换并更新字典与数据源
+            var list = source.ToList();
+            imageDatabase = list.ToDictionary(k => k.ImageName, v => v);
+            PicNameBindingSource.DataSource = list;
+
+            
+            UpdateGroupsFromSource(list);// 提取所有组别并更新 GroupPanel
+            // 3. UI 状态复位
+            if (list.Count > 0)
+            {
+                PicNameBindingSource.Position = 0;
+                FittoView(null, null);
+            }
+            else
+            {
+                image = null;
+                PicView.Invalidate();
             }
         }
-
-        private void SaveTranslation_Click(object sender, EventArgs e)
+        private void UpdateGroupsFromSource(List<ImageInfo> list)
         {
-            if (string.IsNullOrEmpty(currentTranslationPath))
+            // 获取所有图片中出现过的组名，并去重
+            var allGroups = list
+                .SelectMany(img => img.Labels)
+                .Select(l => l.Group)
+                .Distinct()
+                .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)) // 保持之前的排序逻辑
+                .ThenBy(g => g)
+                .ToList();
+
+            // 如果是新文件完全没标签，至少给个默认初始值
+            if (allGroups.Count == 0)
             {
-                MessageBox.Show("路径为空");
+                allGroups.Add("框内");
+                allGroups.Add("框外");
+            }
+
+            // 3. 将结果同步到类级别的成员变量，供右键菜单（添加/删除）使用
+            _availableGroups = allGroups;
+
+            // 4. 设置初始选中项：
+            // 如果当前没有选中项，或者之前的选中项在新列表中不存在，则默认选第一个
+            if (string.IsNullOrEmpty(_currentSelectedGroup) || !_availableGroups.Contains(_currentSelectedGroup))
+            {
+                _currentSelectedGroup = _availableGroups.FirstOrDefault() ?? "";
+            }
+
+            // 5. 调用“伪绑定”方法生成 UI 控件
+            BindGroups(_availableGroups);
+        }
+        private void OpenNowFolder_Click(object sender, EventArgs e)
+        {
+            // 1. 检查当前是否已经打开了翻译文件或确定了文件夹
+            if (string.IsNullOrEmpty(currentFolder) || !Directory.Exists(currentFolder))
+            {
+                MessageBox.Show("当前未定位到有效文件夹，请先打开或新建翻译文件。", "提示");
                 return;
             }
 
             try
             {
-                // 直接把整个字典传进去
-                string outputText = mylabel.Modules.Modules.LabelsToText(this.imageDatabase);
-
-                System.IO.File.WriteAllText(currentTranslationPath, outputText, System.Text.Encoding.UTF8);
-                _undoManager.MarkAsSaved();// 2. 标记已保存
-                MessageBox.Show("保存成功！");
+                // 2. 调用资源管理器打开文件夹
+                // 使用 ProcessStartInfo 确保在不同系统环境下的兼容性
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = currentFolder,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"错误：{ex.Message}");
+                MessageBox.Show($"无法打开文件夹：{ex.Message}");
             }
         }
-        private void SaveAsTranslation_Click(object sender, EventArgs e)
+        #endregion
+        #region 导出栏
+        private void ExportOriginal_Click(object sender, EventArgs e)
         {
-            // 1. 检查数据源是否为空
-            if (imageDatabase == null || imageDatabase.Count == 0)
+            DoExport("导出原翻译", ExportMode.Original);
+        }
+
+        private void ExportCurrent_Click(object sender, EventArgs e)
+        {
+            DoExport("导出新翻译", ExportMode.Current);
+        }
+
+        private void ExportDiff_Click(object sender, EventArgs e)
+        {
+            DoExport("导出修改文档", ExportMode.Diff);
+        }
+        private void DoExport(string title, ExportMode mode)
+        {
+            if (imageDatabase == null || imageDatabase.Count == 0) return;
+
+            using (SaveFileDialog sfd = new SaveFileDialog())
             {
-                MessageBox.Show("当前没有可以保存的数据。", "提示");
-                return;
-            }
-
-            // 2. 弹出保存对话框
-            using (SaveFileDialog saveFile = new SaveFileDialog())
-            {
-                saveFile.Filter = "文本文件|*.txt";
-                saveFile.Title = "另存为标注文件";
-
-                // 如果当前已经有路径，默认定位到该文件夹并建议文件名
-                if (!string.IsNullOrEmpty(currentTranslationPath))
-                {
-                    saveFile.InitialDirectory = System.IO.Path.GetDirectoryName(currentTranslationPath);
-                    saveFile.FileName = System.IO.Path.GetFileName(currentTranslationPath);
-                }
-
-                if (saveFile.ShowDialog() == DialogResult.OK)
+                sfd.Filter = "文本文件|*.txt";
+                sfd.Title = title;
+                if (sfd.ShowDialog() == DialogResult.OK)
                 {
                     try
                     {
-                        // 3. 调用你的树状结构转化逻辑
-                        string outputText = mylabel.Modules.Modules.LabelsToText(this.imageDatabase);
-
-                        // 4. 写入用户选择的新路径
-                        System.IO.File.WriteAllText(saveFile.FileName, outputText, System.Text.Encoding.UTF8);
-
-                        // 5. 【关键】保存成功后，更新当前文件路径变量
-                        this.currentTranslationPath = saveFile.FileName;
-                        this.currentFolder = System.IO.Path.GetDirectoryName(this.currentTranslationPath);
-                        _undoManager.MarkAsSaved();// 2. 标记已保存
-                        MessageBox.Show("另存为成功！", "成功");
+                        string output = mylabel.Modules.Modules.LabelsToText(this.imageDatabase, mode);
+                        File.WriteAllText(sfd.FileName, output, Encoding.UTF8);
+                        MessageBox.Show($"{title}成功！", "提示");
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"另存为失败：\n{ex.Message}", "错误");
+                        MessageBox.Show($"导出失败: {ex.Message}");
                     }
                 }
             }
         }
-
-
+        #endregion
+        #region 修改栏
         private void ModifyGroup_Click(object sender, EventArgs e)
         {
-            // 创建一个简单的右键菜单，让用户选择是“增加”还是“删除”
             ContextMenuStrip menu = new ContextMenuStrip();
 
+            // --- 1. 添加新分组 ---
             var addBtn = new ToolStripMenuItem("添加新分组");
             addBtn.Click += (s, ev) =>
             {
-                // 使用简单的输入框获取新组名
                 string newGroup = Microsoft.VisualBasic.Interaction.InputBox("请输入新分组名称：", "添加分组", "");
                 if (!string.IsNullOrWhiteSpace(newGroup))
                 {
-                    if (!GroupcomboBox.Items.Contains(newGroup))
+                    if (!_availableGroups.Contains(newGroup))
                     {
-                        GroupcomboBox.Items.Add(newGroup);
-                        GroupcomboBox.SelectedItem = newGroup; // 选中新加的
+                        _availableGroups.Add(newGroup);
+                        _currentSelectedGroup = newGroup; // 设置新加的为当前选中
+                        BindGroups(_availableGroups);     // 调用“伪绑定”刷新 UI
                     }
                     else
                     {
@@ -927,25 +961,32 @@ namespace mylabel
                 }
             };
 
-            var delBtn = new ToolStripMenuItem("删除当前分组");
+            // --- 2. 删除当前分组 ---
+            var delBtn = new ToolStripMenuItem("删除当前选中分组");
             delBtn.Click += (s, ev) =>
             {
-                if (GroupcomboBox.SelectedItem != null)
+                if (string.IsNullOrEmpty(_currentSelectedGroup)) return;
+
+                // 基础保护：防止误删核心分组
+                if (_currentSelectedGroup == "框内" || _currentSelectedGroup == "框外")
                 {
-                    string current = GroupcomboBox.SelectedItem.ToString();
-                    var result = MessageBox.Show($"确定要删除分组 [{current}] 吗？", "确认删除", MessageBoxButtons.YesNo);
-                    if (result == DialogResult.Yes)
-                    {
-                        GroupcomboBox.Items.Remove(current);
-                        if (GroupcomboBox.Items.Count > 0) GroupcomboBox.SelectedIndex = 0;
-                    }
+                    MessageBox.Show("基础分组 ['框内', '框外'] 不允许删除。");
+                    return;
+                }
+
+                var result = MessageBox.Show($"确定要删除分组 [{_currentSelectedGroup}] 吗？", "确认删除", MessageBoxButtons.YesNo);
+                if (result == DialogResult.Yes)
+                {
+                    _availableGroups.Remove(_currentSelectedGroup);
+
+                    // 删除后重新选择一个默认组
+                    _currentSelectedGroup = _availableGroups.FirstOrDefault() ?? "";
+                    BindGroups(_availableGroups);
                 }
             };
 
             menu.Items.Add(addBtn);
             menu.Items.Add(delBtn);
-
-            // 在按钮下方弹出菜单
             menu.Show(Control.MousePosition);
         }
 
@@ -960,7 +1001,8 @@ namespace mylabel
             decreaseBtn.Click += (s, ev) => ChangeFontSize(-2);
 
             var resetBtn = new ToolStripMenuItem("重置默认");
-            resetBtn.Click += (s, ev) => {
+            resetBtn.Click += (s, ev) =>
+            {
                 LabelTextBox.Font = new Font(LabelTextBox.Font.FontFamily, 12f); // 假设 9 是默认值
             };
 
@@ -987,6 +1029,13 @@ namespace mylabel
         }// 通用的字体缩放方法
         #endregion
 
+
+
+
+
+
+        #endregion
+
         #region LabelView相关
         private void deleteLabelToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -996,7 +1045,7 @@ namespace mylabel
             _snapshotBeforeEdit = null;
 
             CheckAndPushUndoCommand();
-            var cmd = new AddDeleteCommand(CurrentInfo, CurrentSelectedLabel, false);
+            var cmd = new AddDeleteCommand(CurrentInfo, CurrentSelectedLabel, false, ApplyFilter);
             _undoManager.Execute(cmd);
             PicView.Invalidate();
         }
@@ -1013,43 +1062,27 @@ namespace mylabel
         #region 数据绑定
         private void imageLabelBindingSource_CurrentItemChanged(object sender, EventArgs e)
         {
-            // 1. 获取当前选中的标注对象
-            var current = imageLabelBindingSource.Current as ImageLabel;
+            // 1. 更新只读坐标显示
+            Locationshowlabel.Text = CurrentSelectedLabel != null
+                ? $"X: {CurrentSelectedLabel.X:F4}\nY: {CurrentSelectedLabel.Y:F4}"
+                : "X: 0.0000\nY: 0.0000";
 
-            // 2. 更新只读的坐标显示
-            if (current != null)
-            {
-                Locationshowlabel.Text = $"X: {current.X:F4}\nY: {current.Y:F4}";
-            }
-            else
-            {
-                Locationshowlabel.Text = "X: 0.0000\nY: 0.0000";
-            }
-
-            // 3. 让画布重绘（因为对象属性已经通过绑定自动更新了）
+            // 2. 局部属性变化时的重绘
             PicView.Invalidate();
         }
         private void PicNameBindingSource_CurrentItemChanged(object sender, EventArgs e)
         {
-            // 1. 获取当前选中的图片信息对象
-            var currentImg = PicNameBindingSource.Current as ImageInfo;
-            if (currentImg == null) return;
+            // 1. 切换前结算旧数据的 Undo
+            CheckAndPushUndoCommand();
 
-            string fullPath = Path.Combine(this.currentFolder, currentImg.ImageName);
+            // 2. 核心：重新执行过滤，这会把 imageLabelBindingSource 关联到新图片的 Labels 上
+            imageLabelBindingSource.DataSource = CurrentInfo?.ActiveLabels;
 
-            if (File.Exists(fullPath))
-            {
-                image?.Dispose();
-                using (var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read))
-                {
-                    image = Image.FromStream(fs);
-                }
-            }
-            else
-            {
-                image = null; // 找不到图时清空
-            }
-
+            // 3. 重新初始化快照指针
+            _lastSelectedLabel = imageLabelBindingSource.Current as ImageLabel;
+            _snapshotBeforeEdit = _lastSelectedLabel?.Clone();
+            LoadImageSafe();
+            PicView.Invalidate();
         }
 
         private ImageLabel _snapshotBeforeEdit; // 编辑前的快照
@@ -1060,11 +1093,12 @@ namespace mylabel
             CheckAndPushUndoCommand();
 
             // 2. 为新选中的目标拍摄快照
-            var current = imageLabelBindingSource.Current as ImageLabel;
-            _snapshotBeforeEdit = current?.Clone();
+            _snapshotBeforeEdit = CurrentSelectedLabel?.Clone();
 
-            // 3. UI 反馈
-            PicView.Invalidate();
+            if (CurrentSelectedLabel != null)
+            {
+                UpdateGroupSelectionUI(CurrentSelectedLabel.Group);
+            }
         }
         private void CheckAndPushUndoCommand()
         {
@@ -1087,7 +1121,36 @@ namespace mylabel
             }
 
             // 重要：结算完旧的，把指针指向“当前正在使用的对象”，作为下一次切换时的“旧对象”
-            _lastSelectedLabel = imageLabelBindingSource.Current as ImageLabel;
+            _lastSelectedLabel = CurrentSelectedLabel;
+        }
+        private void LoadImageSafe()// 安全加载图片，防止删除/移动文件时提示“进程被占用”
+        {
+            if (CurrentInfo == null) { image = null; return; }
+
+            string fullPath = Path.Combine(this.currentFolder, CurrentInfo.ImageName);
+            if (File.Exists(fullPath))
+            {
+                try
+                {
+                    image?.Dispose();
+                    // 先读取字节流，再转图像，这样不会占用磁盘文件
+                    byte[] bytes = File.ReadAllBytes(fullPath);
+                    using (var ms = new MemoryStream(bytes))
+                    {
+                        image = Image.FromStream(ms);
+                    }
+                }
+                catch { image = null; }
+            }
+            else
+            {
+                image = null;
+            }
+        }
+        private void ApplyFilter()// 过滤方法
+        {
+            // 以后只需这一行，语义更清晰
+            imageLabelBindingSource.DataSource = CurrentInfo?.ActiveLabels;
         }
         #endregion
 
@@ -1278,6 +1341,163 @@ namespace mylabel
         #endregion
 
 
+
+
+        #region Group相关
+        private string _currentSelectedGroup = "框内";
+        private bool _isUpdatingUIFromCode = false; // 防止死循环的锁
+        // 1. 定义一个私有列表存储数据
+        private List<string> _availableGroups = new List<string>();
+        #region 颜色分配逻辑
+        // 1. 定义预设的鲜艳颜色池（按优先级排列）
+        private readonly Color[] _presetColors = new Color[]
+                {
+            Color.Red,          // 1. 红 (框内)
+            Color.RoyalBlue,    // 2. 蓝 (框外)
+            Color.LimeGreen,    // 4. 绿
+            Color.DarkOrange,   // 5. 橙
+            Color.DeepPink,     // 6. 粉
+            Color.Cyan          // 8. 青
+                };
+
+        // 用于存放已分配的颜色映射
+        private Dictionary<string, Color> _groupColors = new Dictionary<string, Color>();
+
+        private Color GetColorForGroup(string groupName)
+        {
+            // 如果字典里已经有了（无论是预设还是随机生成的），直接返回
+            if (_groupColors.ContainsKey(groupName))
+                return _groupColors[groupName];
+
+            // 如果还没有分配颜色：
+            // 情况 A: 如果当前已分配的数量还没超过预设池的大小，取下一个预设颜色
+            if (_groupColors.Count < _presetColors.Length)
+            {
+                Color preset = _presetColors[_groupColors.Count];
+                _groupColors[groupName] = preset;
+                return preset;
+            }
+
+            // 情况 B: 超过 8 个，开始随机生成（使用 HashCode 保证固定）
+            Random rnd = new Random(groupName.GetHashCode());
+            // 限制在 0-180 之间，确保颜色不会太浅看不清
+            Color newColor = Color.FromArgb(rnd.Next(180), rnd.Next(180), rnd.Next(180));
+            _groupColors[groupName] = newColor;
+            return newColor;
+        }
+        #endregion
+        // 2. 封装刷新逻辑
+        public void BindGroups(List<string> groups)
+        {
+            _availableGroups = groups;
+            _isUpdatingUIFromCode = true;
+
+            flowGroups.SuspendLayout(); // 暂停布局，防止大量控件添加时闪烁
+            flowGroups.Controls.Clear();
+
+            foreach (var groupName in _availableGroups)
+            {
+                // 获取该组对应的颜色（前几个固定，后面的动态生成）
+                Color themeColor = GetColorForGroup(groupName);
+
+                RadioButton rb = new RadioButton
+                {
+                    Text = groupName,
+                    Tag = groupName,
+                    AutoSize = true,
+                    MinimumSize = new Size(40, 30), // 稍微给个最小尺寸更美观
+                    Margin = new Padding(5),
+                    Checked = (groupName == _currentSelectedGroup),
+
+                    Appearance = Appearance.Button,
+                    FlatStyle = FlatStyle.Flat,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    BackColor = Color.Transparent, // 无背景                                                 
+                    ForeColor = themeColor,// 设置文字颜色为组别颜色
+                    // 字体加粗或正常由状态决定
+                    Font = new Font("Microsoft YaHei", 10f, (groupName == _currentSelectedGroup) ? FontStyle.Bold : FontStyle.Regular)
+                };
+                // 彻底隐藏边框
+                rb.FlatAppearance.BorderSize = 0;
+                rb.FlatAppearance.CheckedBackColor = Color.Transparent;
+                rb.FlatAppearance.MouseDownBackColor = Color.Transparent;
+                rb.FlatAppearance.MouseOverBackColor = Color.FromArgb(20, themeColor); // 鼠标悬停时仅显示极淡的底色提示
+
+                // 3. 事件逻辑
+                // --- 核心：重绘逻辑 (画底线) ---
+                rb.Paint += (s, e) =>
+                {
+                    RadioButton btn = (RadioButton)s;
+                    e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                    // 1. 设置文字颜色：选中的用原色，未选中的变半透明/灰色
+                    Color textColor = btn.Checked ? themeColor : Color.FromArgb(120, themeColor);
+                    TextRenderer.DrawText(e.Graphics, btn.Text, btn.Font, btn.ClientRectangle, textColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+                    // 2. 如果选中，在下方画一条厚实的横线
+                    if (btn.Checked)
+                    {
+                        int lineThickness = 3; // 横线厚度
+                        int linePadding = 4;   // 距离左右边缘的缩进
+                        using (Pen p = new Pen(themeColor, lineThickness))
+                        {
+                            // 计算横线位置：位于控件最底部
+                            int y = btn.Height - 2;
+                            e.Graphics.DrawLine(p, linePadding, y, btn.Width - linePadding, y);
+                        }
+                    }
+                };
+
+                rb.CheckedChanged += (s, e) =>
+                {
+                    // 切换状态时改变字体（可选，配合横线效果更好）
+                    rb.Font = new Font("Microsoft YaHei", 10f, rb.Checked ? FontStyle.Bold : FontStyle.Regular);
+
+                    if (_isUpdatingUIFromCode) return;
+
+                    if (rb.Checked)
+                    {
+                        _currentSelectedGroup = rb.Tag.ToString();
+                        flowGroups.Invalidate(true); // 必须重绘整个容器，让旧按钮的线消失
+
+                        if (imageLabelBindingSource.Current is ImageLabel label)
+                        {
+                            label.Group = rb.Text;
+                            PicView.Invalidate();
+                            imageLabelBindingSource.ResetCurrentItem();
+                        }
+                    }
+                };
+
+                flowGroups.Controls.Add(rb);
+            }
+            flowGroups.ResumeLayout();
+            _isUpdatingUIFromCode = false; // 释放锁
+        }
+        
+
+        private void UpdateGroupSelectionUI(string groupName)// 辅助方法：根据标签的组别，自动选中对应的 RadioButton
+        {
+            _isUpdatingUIFromCode = true; // 开启锁
+            try
+            {
+                foreach (Control ctrl in flowGroups.Controls)
+                {
+                    if (ctrl is RadioButton rb)
+                    {
+                        // 如果 RadioButton 的文本匹配当前标签的组名，则选中它
+                        rb.Checked = (rb.Text == groupName);
+                    }
+                }
+                // 更新当前记录的选中组变量
+                _currentSelectedGroup = groupName;
+            }
+            finally
+            {
+                _isUpdatingUIFromCode = false; // 释放锁
+            }
+        }
+        #endregion
     }
 
 }

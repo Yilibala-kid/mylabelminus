@@ -172,35 +172,11 @@ namespace mylabel
         }
         private void LP_Click(object sender, EventArgs e)
         {
-            // 上一张 (Last Picture)
-            if (PicName.Items.Count > 0)
-            {
-                // 如果当前不是第一张，索引减 1；如果是第一张，则跳到最后一张（循环模式）
-                int newIndex = PicName.SelectedIndex - 1;
-
-                if (newIndex < 0)
-                {
-                    newIndex = PicName.Items.Count - 1; // 循环到最后
-                }
-
-                PicName.SelectedIndex = newIndex;
-            }
+            PicNameBindingSource.MovePrevious();
         }
         private void NP_Click(object sender, EventArgs e)
         {
-            // 下一张 (Next Picture)
-            if (PicName.Items.Count > 0)
-            {
-                // 如果当前不是最后一张，索引加 1；如果是最后一张，则跳到第一张（循环模式）
-                int newIndex = PicName.SelectedIndex + 1;
-
-                if (newIndex >= PicName.Items.Count)
-                {
-                    newIndex = 0; // 循环到开头
-                }
-
-                PicName.SelectedIndex = newIndex;
-            }
+            PicNameBindingSource.MoveNext();
         }
         private void Indexlabel_Paint(object sender, PaintEventArgs e)
         {
@@ -220,5 +196,33 @@ namespace mylabel
             }
         }
         #endregion
+
+        private void ParamHide_Click(object sender, EventArgs e)
+        {
+            Parampanel1.Visible = !Parampanel1.Visible;
+        }
+
+        private void LabelTextBoxOnly_Click(object sender, EventArgs e)
+        {
+            LabelViewpanel.Visible = false;
+            Parampanel.Visible = true;
+            Parampanel.Dock = DockStyle.Fill;
+        }
+
+        private void LabelViewOnly_Click(object sender, EventArgs e)
+        {
+            LabelViewpanel.Visible = true;
+            Parampanel.Visible = false;
+            LabelViewpanel.Dock = DockStyle.Fill;
+        }
+
+        private void BothShow_Click(object sender, EventArgs e)
+        {
+            LabelViewpanel.Visible = true;
+            Parampanel.Visible = true;
+            LabelViewpanel.Dock = DockStyle.Fill;
+            Parampanel.Dock = DockStyle.Bottom;
+
+        }
     }
 }

@@ -84,31 +84,63 @@ namespace LabelMinus
         /// </summary>
         public class AddDeleteCommand : ICommand
         {
-            private readonly BindingList<ImageLabel> _list;
             private readonly ImageLabel _label;
             private readonly ImageInfo _parent;
-            private readonly bool _isAdd;
+            private readonly bool _isAddAction; // true 为添加操作，false 为删除操作
+            private readonly Action _refreshUI; // 传入界面刷新回调（用于 ApplyFilter）
 
-            public AddDeleteCommand(ImageInfo parent, ImageLabel label, bool isAdd)
+            public AddDeleteCommand(ImageInfo parent, ImageLabel label, bool isAddAction, Action refreshUI)
             {
                 _parent = parent;
-                _list = parent.Labels;
                 _label = label;
-                _isAdd = isAdd;
+                _isAddAction = isAddAction;
+                _refreshUI = refreshUI;
             }
-
             public void Execute()
             {
-                if (_isAdd) _list.Add(_label);
-                else _list.Remove(_label);
-                _parent.RefreshIndices();
+                if (_isAddAction)
+                {
+                    // --- 核心修改：给新标签一个暂时的“末尾序号” ---
+                    if (_label.Index <= 0 || _parent.Labels.Any(l => l.Index == _label.Index))
+                    {
+                        // 找到当前最大序号，加 1
+                        int maxIdx = _parent.Labels.Count > 0 ? _parent.Labels.Max(l => l.Index) : 0;
+                        _label.Index = maxIdx + 1;
+                    }
+                    // 执行添加
+                    if (!_parent.Labels.Contains(_label))
+                        _parent.Labels.Add(_label);
+                    _label.IsDeleted = false;
+                }
+                else
+                {
+                    // 执行删除 (软删除)
+                    _label.IsDeleted = true;
+                }
+
+                Finish();
             }
 
             public void Undo()
             {
-                if (_isAdd) _list.Remove(_label);
-                else _list.Add(_label);
-                _parent.RefreshIndices();
+                if (_isAddAction)
+                {
+                    // 撤销添加 -> 标记为删除
+                    _label.IsDeleted = true;
+                }
+                else
+                {
+                    // 撤销删除 -> 恢复显示
+                    _label.IsDeleted = false;
+                }
+
+                Finish();
+            }
+
+            private void Finish()
+            {
+                _parent.RefreshIndices(); // 重新排序号
+                _refreshUI?.Invoke();     // 触发 UI 过滤 (ApplyFilter)
             }
         }
 

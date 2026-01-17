@@ -18,66 +18,68 @@ namespace mylabel.Modules
         /// <summary>
         /// 核心绘图函数：绘制序号及竖向文字
         /// </summary>
-        public static void DrawAnnotations(Graphics g, ImageInfo currentImage, Size imgSize,
-                                                     float scale, ImageLabel selectedLabel, float imageDpi, bool onlyShowIndex = false)
+        public static void DrawAnnotations(Graphics g, ImageInfo currentImage, Size imgSize,float scale, ImageLabel selectedLabel, 
+                                                     float imageDpi, Func<string, Color> colorPicker, bool onlyShowIndex = false)
         {
             // 如果当前图片对象为空，直接退出
             if (currentImage == null || currentImage.Labels == null) return;
             // 开启抗锯齿，保证缩放后文字依然清晰
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
+            // 1. 预创建居中格式（用于序号）和竖排格式（用于内容）
+            using var centerFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            using var vFormat = new StringFormat { FormatFlags = StringFormatFlags.DirectionVertical | StringFormatFlags.DirectionRightToLeft };
+            // 序号字体
+            using var indexFont = new Font("Arial", 20 * imageDpi, FontStyle.Bold, GraphicsUnit.Pixel);
 
-
-            // 准备竖排格式
-            using (StringFormat vFormat = new StringFormat())
+            foreach (var label in currentImage.Labels)
             {
-                vFormat.FormatFlags = StringFormatFlags.DirectionVertical | StringFormatFlags.DirectionRightToLeft;
-                vFormat.Alignment = StringAlignment.Near;
+                if (label.IsDeleted) continue;
 
-                foreach (var label in currentImage.Labels)
+                // 计算基础坐标
+                float x = label.Position.X * imgSize.Width;
+                float y = label.Position.Y * imgSize.Height;
+
+                bool isSelected = (label == selectedLabel);
+                Color groupColor = colorPicker(label.Group);
+                Color finalColor = isSelected ? Color.Purple : groupColor;
+
+                using var themeBrush = new SolidBrush(finalColor);
+
+                // --- A. 绘制序号 ---
+                string idxStr = label.Index.ToString();
+
+                // 如果没有了圆圈，我们可以给序号加一个极小的阴影或发光，防止在复杂背景下看不清（可选）
+                // 这里直接绘制居中文字
+                g.DrawString(idxStr, indexFont, themeBrush, x, y, centerFormat);
+
+                // --- B. 绘制内容 ---
+                if (onlyShowIndex || string.IsNullOrEmpty(label.Text)) continue;
+
+                float fontSize = (label.FontSize > 0 ? (float)label.FontSize : 12f) * imageDpi;
+                Font textFont = GetSafeFont(label.FontFamily, fontSize);
+
+                using (textFont)
                 {
-
-                    // 计算在图片上的实际像素坐标
-                    float x = label.Position.X * imgSize.Width;
-                    float y = label.Position.Y * imgSize.Height;
-
-                    // 颜色逻辑
-                    bool isSelected = (label == selectedLabel);
-                    Brush themeBrush = isSelected ? Brushes.Purple : Brushes.Red;
-                    // --- A. 绘制序号 (始终绘制) ---
-                    using (Font indexFont = new Font("Arial", 20 * imageDpi, FontStyle.Bold, GraphicsUnit.Pixel))
-                    {
-                        string idxStr = label.Index.ToString();
-                        SizeF size = g.MeasureString(idxStr, indexFont);
-                        float centerX = x - (size.Width / 2f);
-                        float centerY = y - (size.Height / 2f);
-
-                        g.DrawString(idxStr, indexFont, themeBrush, centerX, centerY);
-
-                        // --- B. 绘制内容 (受 onlyShowIndex 控制) ---
-                        // 如果开启了“仅显示序号”，或者文本为空，则跳过以下逻辑
-                        if (onlyShowIndex || string.IsNullOrEmpty(label.Text)) continue;
-
-                        // 只有非文校模式才创建这些字体，节省性能
-                        float currentOriginFontSize = label.FontSize > 0 ? (float)label.FontSize : 12f;
-                        float currentFontSize = currentOriginFontSize * imageDpi;
-
-                        Font textFont = null;
-                        try
-                        {
-                            textFont = new Font(label.FontFamily, currentFontSize, FontStyle.Regular, GraphicsUnit.Pixel);
-                        }
-                        catch
-                        {
-                            textFont = new Font("Microsoft YaHei", currentFontSize, FontStyle.Regular, GraphicsUnit.Pixel);
-                        }
-
-                        using (textFont)
-                        {
-                            float textX = centerX + (currentFontSize * 0.4f);
-                            g.DrawString(label.Text, textFont, themeBrush, textX, y, vFormat);
-                        }
-                    }
+                    // 因为没有了圆圈，内容文本的起始位置直接从序号下方偏移一点即可
+                    // 25 * imageDpi 大约是序号文字占据的高度空间
+                    float textY = y + (15 * imageDpi);
+                    g.DrawString(label.Text, textFont, themeBrush, x, textY, vFormat);
                 }
+            }
+
+        }
+        private static Font GetSafeFont(string family, float size)
+        {
+            try
+            {
+                // 尝试根据数据库记录的名称创建字体
+                return new Font(family, size, FontStyle.Regular, GraphicsUnit.Pixel);
+            }
+            catch
+            {
+                // 如果创建失败（比如对方电脑没装这个字体），则强制回退到“微软雅黑”
+                // 如果连微软雅黑都没有，Windows 会自动指定一个系统默认字体（如宋体）
+                return new Font("Microsoft YaHei", size, FontStyle.Regular, GraphicsUnit.Pixel);
             }
         }
 
@@ -89,13 +91,12 @@ namespace mylabel.Modules
             var database = new Dictionary<string, ImageInfo>();
             var groupList = new List<string>(); // 存储从文件头读取到的动态分组
 
-            // 使用正则预编译，提高性能
+            // 使用预编译正则，提高性能
             var imgRegex = new Regex(@">>>>>>>>\[(.*?)\]<<<<<<<<", RegexOptions.Compiled);
             var metaRegex = new Regex(@"----------------\[(\d+)\]----------------\[([\d\.]+),([\d\.]+),(\d+)\]", RegexOptions.Compiled);
 
             string[] lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-
-            string currentImgName = string.Empty;
+            string currentImgName = null;
             ImageLabel currentLabel = null;
             int hyphenCount = 0; // 用于追踪我们处理到了第几个 "-" 分隔符
 
@@ -103,79 +104,60 @@ namespace mylabel.Modules
             {
                 string line = rawLine.Trim();
                 if (string.IsNullOrEmpty(line)) continue;
-
-                // --- 1. 动态解析文件头部的分组信息 ---
-                if (line == "-")
-                {
-                    hyphenCount++;
-                    continue;
-                }
-
-                // 当处于第一个和第二个 "-" 之间时，认为这些行是分组名称
-                if (hyphenCount == 1)
-                {
-                    groupList.Add(line);
-                    continue;
-                }
-
-                // --- 2. 识别图片行 ---
+                // 1. 处理文件头分组
+                if (line == "-") { hyphenCount++; continue; }
+                if (hyphenCount == 1) { groupList.Add(line); continue; }
+                // 2. 识别图片
                 var imgMatch = imgRegex.Match(line);
                 if (imgMatch.Success)
                 {
-                    // 移除后缀（如果你需要的话，可以用 Path.GetFileNameWithoutExtension）
-                    currentImgName = imgMatch.Groups[1].Value;
+                    // 在切换图片前，确保上一个 Label 的状态被锁定
+                    currentLabel?.LoadBaseContent(currentLabel.Text);
 
-                    if (!database.ContainsKey(currentImgName))
-                    {
-                        database[currentImgName] = new ImageInfo { ImageName = currentImgName };
-                    }
+                    currentImgName = imgMatch.Groups[1].Value;
+                    database[currentImgName] = new ImageInfo { ImageName = currentImgName };
+                    currentLabel = null; // 重置当前标签
                     continue;
                 }
 
                 // --- 3. 识别标注元数据行 ---
                 var metaMatch = metaRegex.Match(line);
-                if (metaMatch.Success)
+                if (metaMatch.Success && currentImgName != null)
                 {
-                    if (string.IsNullOrEmpty(currentImgName)) continue;
+                    // 在处理新 Label 前，锁定上一个 Label 的原文
+                    currentLabel?.LoadBaseContent(currentLabel.Text);
 
-                    int index = int.Parse(metaMatch.Groups[1].Value);
-                    float x = float.Parse(metaMatch.Groups[2].Value);
-                    float y = float.Parse(metaMatch.Groups[3].Value);
                     int groupIdx = int.Parse(metaMatch.Groups[4].Value);
-
-                    // 根据文件头的索引获取组名 (文件里是从 1 开始的)
-                    string groupName = "默认分组";
-                    if (groupIdx > 0 && groupIdx <= groupList.Count)
-                    {
-                        groupName = groupList[groupIdx - 1];
-                    }
-                    else
-                    {
-                        // 兼容性逻辑：如果 idx 是 1 或 2 且 groupList 为空
-                        if (groupIdx == 1) groupName = "框内";
-                        else if (groupIdx == 2) groupName = "框外";
-                    }
+                    string groupName = (groupIdx > 0 && groupIdx <= groupList.Count)
+                                       ? groupList[groupIdx - 1]
+                                       : (groupIdx == 2 ? "框外" : "框内");
 
                     currentLabel = new ImageLabel
                     {
-                        Index = index,
-                        Position = new BoundingBox { X = x, Y = y, Width = 0f, Height = 0f },
+                        Index = int.Parse(metaMatch.Groups[1].Value),
+                        Position = new BoundingBox(float.Parse(metaMatch.Groups[2].Value), float.Parse(metaMatch.Groups[3].Value), 0, 0),
                         Group = groupName,
-                        Text = ""
+                        Text = "" // 暂时为空，等待下方读取文本行
                     };
-
                     database[currentImgName].Labels.Add(currentLabel);
                     continue;
                 }
 
                 // --- 4. 识别标注文本内容 ---
                 // 排除掉干扰行（如头部信息和分隔符）
-                if (currentLabel != null && hyphenCount >= 2 && !line.StartsWith(">") && !line.StartsWith("-"))
+                if (currentLabel != null && hyphenCount >= 2)
                 {
-                    if (string.IsNullOrEmpty(currentLabel.Text))
-                        currentLabel.Text = line;
-                    else
-                        currentLabel.Text += Environment.NewLine + line;
+                    currentLabel.Text = string.IsNullOrEmpty(currentLabel.Text)
+                                        ? line
+                                        : currentLabel.Text + Environment.NewLine + line;
+                }
+            }
+            foreach (var img in database.Values)
+            {
+                foreach (var lbl in img.Labels)
+                {
+                    // 将当前读到的 Text 正式转为 OriginalText，并重置 IsModified
+                    lbl.LoadBaseContent(lbl.Text);
                 }
             }
 
@@ -185,70 +167,78 @@ namespace mylabel.Modules
         /// <summary>
         /// 将列表数据转换回特定的 txt 文本格式
         /// </summary>
-        public static string LabelsToText(Dictionary<string, ImageInfo> imageDatabase)
+        public enum ExportMode { Original, Current, Diff }
+        public static string LabelsToText(Dictionary<string, ImageInfo> imageDatabase, ExportMode mode = ExportMode.Current)
         {
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
-            // --- 1. 动态获取所有 Group 并排序 ---
-            // 找出所有图片中用到的所有组名，并去重
+            // --- 1. 获取分组映射 (保持原逻辑) ---
             var allGroups = imageDatabase.Values
                     .SelectMany(img => img.Labels)
-                    .Select(l => l.Group)
-                    .Distinct()
-                    .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)) // 强制框内=1, 框外=2
-                    .ThenBy(g => g) // 其余按字母排
-                    .ToList();
-
-            // 如果没有任何标签，至少给个默认值
+                    .Select(l => l.Group).Distinct()
+                    .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)).ThenBy(g => g).ToList();
             if (allGroups.Count == 0) { allGroups.Add("框内"); allGroups.Add("框外"); }
-
-            // 建立 组名 -> 编号 的映射 (从 1 开始)
-            var groupToIdMap = new Dictionary<string, int>();
-
+            var groupToIdMap = allGroups.Select((g, i) => new { g, id = i + 1 }).ToDictionary(x => x.g, x => x.id);
             // 写入头部
-            sb.AppendLine("1,0");
-            sb.AppendLine("-");
-            for (int i = 0; i < allGroups.Count; i++)
-            {
-                string gName = allGroups[i];
-                groupToIdMap[gName] = i + 1; // 存储映射关系
-                sb.AppendLine(gName);       // 写入文件头
-            }
-            sb.AppendLine("-");
-            sb.AppendLine("Default Comment");
-            sb.AppendLine("You can edit me");
-            sb.AppendLine();
+            sb.AppendLine("1,0\n-\n" + string.Join("\n", allGroups) + "\n-\nDefault Comment\nYou can edit me\n");
 
-            // 2. 字典的 Keys 已经是唯一的图片名，直接排序后遍历
-            var sortedImageNames = imageDatabase.Keys.OrderBy(name => name);
-
-            foreach (var imageName in sortedImageNames)
+            // --- 2. 遍历图片 ---
+            foreach (var imageName in imageDatabase.Keys.OrderBy(name => name))
             {
                 var imageInfo = imageDatabase[imageName];
 
-                // 写入图片分隔符（使用 Path.GetFileName 确保格式统一）
+                // 修改点：如果不是 Diff 模式，检查是否存在未删除的标签；如果是 Diff 模式，检查是否有修改
+                bool shouldExportImage = mode == ExportMode.Diff
+                    ? imageInfo.Labels.Any(l => l.IsModified)
+                    : imageInfo.Labels.Any(l => !l.IsDeleted);
+
+                if (!shouldExportImage) continue;
+
                 string pureName = System.IO.Path.GetFileName(imageName);
                 sb.AppendLine($">>>>>>>>[{pureName}]<<<<<<<<");
 
-                // 3. 遍历该图片下的所有标注（已经由 ImageInfo 管理，直接排序 Index 即可）
+                // --- 3. 遍历标注 ---
                 foreach (var label in imageInfo.Labels.OrderBy(l => l.Index))
                 {
-                    // 从映射表中取值
-                    if (!groupToIdMap.TryGetValue(label.Group, out int groupValue))
+                    // --- 核心修改：根据模式过滤标签 ---
+                    if (mode == ExportMode.Diff)
                     {
-                        groupValue = 1;
+                        // Diff 模式：只导出有变动的（包括已删除的和内容修改的）
+                        if (!label.IsModified) continue;
+                    }
+                    else
+                    {
+                        // 普通模式 (Current/Original)：绝对不导出已删除的标签
+                        if (label.IsDeleted) continue;
                     }
 
-                    // 写入标注行
-                    sb.AppendLine($"----------------[{label.Index}]----------------[{label.Position.X:F3},{label.Position.Y:F3},{groupValue}]");
+                    // 写入坐标和组信息
+                    int groupValue = groupToIdMap.ContainsKey(label.Group) ? groupToIdMap[label.Group] : 1;
+                    sb.AppendLine($"----------------[{label.Index}]----------------[{label.X:F3},{label.Y:F3},{groupValue}]");
 
-                    // 写入文本内容
-                    sb.AppendLine(label.Text);
+                    // --- 4. 写入文本内容 ---
+                    if (mode == ExportMode.Diff)
+                    {
+                        if (label.IsDeleted)
+                        {
+                            sb.AppendLine("【状态】：!!! 已删除 !!!");
+                            sb.AppendLine($"【原内容】：{label.OriginalText}");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"【OLD】\n{label.OriginalText}");
+                            sb.AppendLine($"【NEW】\n{label.Text}");
+                        }
+                    }
+                    else
+                    {
+                        // Current 模式写 Text，Original 模式写 OriginalText
+                        sb.AppendLine(mode == ExportMode.Original ? label.OriginalText : label.Text);
+                    }
                     sb.AppendLine();
                 }
                 sb.AppendLine();
             }
-
             return sb.ToString();
         }
 
@@ -395,6 +385,10 @@ namespace mylabel.Modules
         {
             foreach (Control ctrl in controls)
             {
+                if (ctrl is RadioButton && ctrl.Parent?.Name == "flowGroups")
+                {
+                    continue;
+                }
                 // 使用新版 C# 的模式匹配
                 switch (ctrl)
                 {
