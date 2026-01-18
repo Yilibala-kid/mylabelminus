@@ -450,7 +450,6 @@
             Name = "ImageReviewForm";
             Text = "图校";
             Load += ImageReviewForm_Load;
-            SizeChanged += ImageReviewForm_SizeChanged;
             KeyDown += myKeyDown;
             KeyUp += myKeyUp;
             splitContainer1.Panel1.ResumeLayout(false);

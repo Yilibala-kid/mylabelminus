@@ -71,7 +71,7 @@ public class ImageLabel : ViewModelBase
     private int _index;
     private string _text = "";
     private string _originalText = ""; // 存储原文
-    private double _fontSize = 20.0;
+    private double _fontSize = 16.0;
     private string _fontFamily = "微软雅黑";
     private string _group = "框内";
     private string _remark = "这是备注";

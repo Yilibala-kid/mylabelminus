@@ -45,14 +45,16 @@
             ModifyMenu = new ToolStripMenuItem();
             ModifyGroup = new ToolStripMenuItem();
             LabelTextFontsize = new ToolStripMenuItem();
-            BothShow = new ToolStripMenuItem();
-            LabelViewOnly = new ToolStripMenuItem();
-            LabelTextBoxOnly = new ToolStripMenuItem();
-            ParamHide = new ToolStripMenuItem();
+            ChangeOCRWeb = new ToolStripMenuItem();
             ExportText = new ToolStripMenuItem();
             ExportOriginal = new ToolStripMenuItem();
             ExportCurrent = new ToolStripMenuItem();
             ExportDiff = new ToolStripMenuItem();
+            显示ToolStripMenuItem = new ToolStripMenuItem();
+            BothShow = new ToolStripMenuItem();
+            LabelViewOnly = new ToolStripMenuItem();
+            LabelTextBoxOnly = new ToolStripMenuItem();
+            ParamHide = new ToolStripMenuItem();
             LabelView = new DataGridView();
             LabelIndex = new DataGridViewTextBoxColumn();
             LabelText = new DataGridViewTextBoxColumn();
@@ -144,7 +146,7 @@
             // Menu
             // 
             Menu.BackColor = Color.White;
-            Menu.Items.AddRange(new ToolStripItem[] { FileMenu, ModifyMenu, ExportText });
+            Menu.Items.AddRange(new ToolStripItem[] { FileMenu, ModifyMenu, ExportText, 显示ToolStripMenuItem });
             Menu.Location = new Point(0, 0);
             Menu.Name = "Menu";
             Menu.Size = new Size(984, 25);
@@ -161,41 +163,41 @@
             // NewTranslation
             // 
             NewTranslation.Name = "NewTranslation";
-            NewTranslation.Size = new Size(160, 22);
+            NewTranslation.Size = new Size(180, 22);
             NewTranslation.Text = "新建翻译";
             NewTranslation.Click += NewTranslation_Click;
             // 
             // OpenTranslation
             // 
             OpenTranslation.Name = "OpenTranslation";
-            OpenTranslation.Size = new Size(160, 22);
+            OpenTranslation.Size = new Size(180, 22);
             OpenTranslation.Text = "打开翻译";
             OpenTranslation.Click += OpenTranslation_Click;
             // 
             // SaveTranslation
             // 
             SaveTranslation.Name = "SaveTranslation";
-            SaveTranslation.Size = new Size(160, 22);
+            SaveTranslation.Size = new Size(180, 22);
             SaveTranslation.Text = "保存翻译";
             SaveTranslation.Click += SaveTranslation_Click;
             // 
             // SaveAsTranslation
             // 
             SaveAsTranslation.Name = "SaveAsTranslation";
-            SaveAsTranslation.Size = new Size(160, 22);
+            SaveAsTranslation.Size = new Size(180, 22);
             SaveAsTranslation.Text = "另存为翻译";
             SaveAsTranslation.Click += SaveAsTranslation_Click;
             // 
             // OpenNowFolder
             // 
             OpenNowFolder.Name = "OpenNowFolder";
-            OpenNowFolder.Size = new Size(160, 22);
+            OpenNowFolder.Size = new Size(180, 22);
             OpenNowFolder.Text = "打开工作文件夹";
             OpenNowFolder.Click += OpenNowFolder_Click;
             // 
             // ModifyMenu
             // 
-            ModifyMenu.DropDownItems.AddRange(new ToolStripItem[] { ModifyGroup, LabelTextFontsize, BothShow, LabelViewOnly, LabelTextBoxOnly, ParamHide });
+            ModifyMenu.DropDownItems.AddRange(new ToolStripItem[] { ModifyGroup, LabelTextFontsize, ChangeOCRWeb });
             ModifyMenu.Name = "ModifyMenu";
             ModifyMenu.Size = new Size(44, 21);
             ModifyMenu.Text = "修改";
@@ -214,33 +216,12 @@
             LabelTextFontsize.Text = "修改文本框字号";
             LabelTextFontsize.Click += LabelTextFontsize_Click;
             // 
-            // BothShow
+            // ChangeOCRWeb
             // 
-            BothShow.Name = "BothShow";
-            BothShow.Size = new Size(160, 22);
-            BothShow.Text = "列表与文本框";
-            BothShow.Click += BothShow_Click;
-            // 
-            // LabelViewOnly
-            // 
-            LabelViewOnly.Name = "LabelViewOnly";
-            LabelViewOnly.Size = new Size(160, 22);
-            LabelViewOnly.Text = "仅标记列表";
-            LabelViewOnly.Click += LabelViewOnly_Click;
-            // 
-            // LabelTextBoxOnly
-            // 
-            LabelTextBoxOnly.Name = "LabelTextBoxOnly";
-            LabelTextBoxOnly.Size = new Size(160, 22);
-            LabelTextBoxOnly.Text = "仅文本框";
-            LabelTextBoxOnly.Click += LabelTextBoxOnly_Click;
-            // 
-            // ParamHide
-            // 
-            ParamHide.Name = "ParamHide";
-            ParamHide.Size = new Size(160, 22);
-            ParamHide.Text = "次要参数";
-            ParamHide.Click += ParamHide_Click;
+            ChangeOCRWeb.Name = "ChangeOCRWeb";
+            ChangeOCRWeb.Size = new Size(160, 22);
+            ChangeOCRWeb.Text = "修改OCR网站";
+            ChangeOCRWeb.Click += ChangeOCRWeb_Click;
             // 
             // ExportText
             // 
@@ -269,6 +250,37 @@
             ExportDiff.Size = new Size(148, 22);
             ExportDiff.Text = "导出修改文档";
             ExportDiff.Click += ExportDiff_Click;
+            // 
+            // 显示ToolStripMenuItem
+            // 
+            显示ToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { BothShow, LabelViewOnly, LabelTextBoxOnly, ParamHide });
+            显示ToolStripMenuItem.Name = "显示ToolStripMenuItem";
+            显示ToolStripMenuItem.Size = new Size(44, 21);
+            显示ToolStripMenuItem.Text = "显示";
+            // 
+            // BothShow
+            // 
+            BothShow.Name = "BothShow";
+            BothShow.Size = new Size(148, 22);
+            BothShow.Text = "列表与文本框";
+            // 
+            // LabelViewOnly
+            // 
+            LabelViewOnly.Name = "LabelViewOnly";
+            LabelViewOnly.Size = new Size(148, 22);
+            LabelViewOnly.Text = "仅标记列表";
+            // 
+            // LabelTextBoxOnly
+            // 
+            LabelTextBoxOnly.Name = "LabelTextBoxOnly";
+            LabelTextBoxOnly.Size = new Size(148, 22);
+            LabelTextBoxOnly.Text = "仅文本框";
+            // 
+            // ParamHide
+            // 
+            ParamHide.Name = "ParamHide";
+            ParamHide.Size = new Size(148, 22);
+            ParamHide.Text = "次要参数";
             // 
             // LabelView
             // 
@@ -950,10 +962,6 @@
         private ToolStripMenuItem ExportCurrent;
         private ToolStripMenuItem ExportDiff;
         private ToolStripMenuItem OpenNowFolder;
-        private ToolStripMenuItem ParamHide;
-        private ToolStripMenuItem LabelViewOnly;
-        private ToolStripMenuItem LabelTextBoxOnly;
-        private ToolStripMenuItem BothShow;
         private Panel GroupPanel;
         private FlowLayoutPanel flowGroups;
         private DataGridViewTextBoxColumn LabelIndex;
@@ -967,5 +975,11 @@
         private DataGridViewTextBoxColumn fontFamilyDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn remarkDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn originalTextDataGridViewTextBoxColumn;
+        private ToolStripMenuItem 显示ToolStripMenuItem;
+        private ToolStripMenuItem ChangeOCRWeb;
+        private ToolStripMenuItem BothShow;
+        private ToolStripMenuItem LabelViewOnly;
+        private ToolStripMenuItem LabelTextBoxOnly;
+        private ToolStripMenuItem ParamHide;
     }
 }

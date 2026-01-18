@@ -60,7 +60,6 @@ namespace mylabel.Modules
 
                 using (textFont)
                 {
-                    // 因为没有了圆圈，内容文本的起始位置直接从序号下方偏移一点即可
                     // 25 * imageDpi 大约是序号文字占据的高度空间
                     float textY = y + (15 * imageDpi);
                     g.DrawString(label.Text, textFont, themeBrush, x, textY, vFormat);
@@ -70,16 +69,22 @@ namespace mylabel.Modules
         }
         private static Font GetSafeFont(string family, float size)
         {
+            FontStyle style = FontStyle.Regular;
+
+            // 如果请求的是微软雅黑，或者即将回退到微软雅黑，设定为加粗
+            if (family.Contains("微软雅黑") || family.Contains("Microsoft YaHei"))
+            {
+                style = FontStyle.Bold;
+            }
+
             try
             {
-                // 尝试根据数据库记录的名称创建字体
-                return new Font(family, size, FontStyle.Regular, GraphicsUnit.Pixel);
+                return new Font(family, size, style, GraphicsUnit.Pixel);
             }
             catch
             {
-                // 如果创建失败（比如对方电脑没装这个字体），则强制回退到“微软雅黑”
-                // 如果连微软雅黑都没有，Windows 会自动指定一个系统默认字体（如宋体）
-                return new Font("Microsoft YaHei", size, FontStyle.Regular, GraphicsUnit.Pixel);
+                // 回退逻辑：强制使用微软雅黑 + 加粗
+                return new Font("Microsoft YaHei", size, FontStyle.Bold, GraphicsUnit.Pixel);
             }
         }
 

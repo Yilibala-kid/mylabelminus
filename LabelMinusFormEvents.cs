@@ -145,6 +145,10 @@ namespace mylabel
         }
         private void FittoView(object sender, EventArgs e)
         {
+            fittoview();
+        }
+        private void fittoview() 
+        {
             if (image == null) return;
 
             // 1. PictureBox 的可用绘制区域

@@ -170,13 +170,7 @@ namespace mylabel
             FontsizecomboBox.DropDownStyle = ComboBoxStyle.DropDown;
         }
         #endregion
-        private void InitOCRComboBox()
-        {
-            OCRComboBox.Items.Clear();
-            OCRComboBox.Items.Add("识字体网 (LikeFont)");
-            OCRComboBox.Items.Add("AI识别（YuzuMarker.FontDetection）"); // 或者你想加的其他网站
-            OCRComboBox.SelectedIndex = 0; // 默认选第一个
-        }
+
         private void ClearTempFolders()
         {
             // 定义需要清理的文件夹列表
@@ -279,7 +273,7 @@ namespace mylabel
                     dpiScale,
                     (groupName) => GetColorForGroup(groupName),
                     onlyShowIndex
-                    
+
                 );
             }
             // --- OCR 模式独有层 ---
@@ -826,7 +820,7 @@ namespace mylabel
             imageDatabase = list.ToDictionary(k => k.ImageName, v => v);
             PicNameBindingSource.DataSource = list;
 
-            
+
             UpdateGroupsFromSource(list);// 提取所有组别并更新 GroupPanel
             // 3. UI 状态复位
             if (list.Count > 0)
@@ -1168,6 +1162,50 @@ namespace mylabel
             SetMode(_currentDownAction == DoOCRMouseDown ? "LabelMode" : "OCR");
         }
 
+
+        #endregion
+
+
+
+        #region 界面美化(记得在Load中引用)
+        private int radius = 20;
+        private void BeautifyUI()
+        {
+            //Parampanel2_Resize(null, null);
+            //LabelViewpanel_Resize(null, null);
+        }
+        private bool isDarkMode = false;
+
+        private void DarkorWhiteMode_Click(object sender, EventArgs e)
+        {
+            // 一键切换
+            ThemeManager.ToggleTheme(this);
+            // 关键：重新调用一次 SetMode，刷新当前处于激活状态按钮的颜色
+            if (_currentDownAction == DoOCRMouseDown) SetMode("OCR");
+            else if (_currentDownAction == DoTextReviewMouseDown) SetMode("TextReview");
+            else SetMode("LabelMode");
+            TextBox_FocusChanged(LabelTextBox, null); TextBox_FocusChanged(RemarktextBox, null);
+            PicView.Invalidate();
+        }
+        #endregion
+
+
+
+        #region OCR相关
+        private Dictionary<string, string> _ocrSites = new Dictionary<string, string>
+            {
+                { "识字体网 (LikeFont)", "https://www.likefont.com/" },
+                { "AI识别 (YuzuMarker)", "https://huggingface.co/spaces/gyrojeff/YuzuMarker.FontDetection" }
+            };
+        private void InitOCRComboBox()
+        {
+            OCRComboBox.Items.Clear();
+            foreach (var siteName in _ocrSites.Keys)
+            {
+                OCRComboBox.Items.Add(siteName);
+            }
+            if (OCRComboBox.Items.Count > 0) OCRComboBox.SelectedIndex = 0;
+        }
         private string CaptureOCRImageAndGetPath()
         {
             try
@@ -1216,17 +1254,12 @@ namespace mylabel
         }
         private void ShowOCRWebPage(string imagePath)
         {
-            // 获取用户选择的网站
             string selectedSite = OCRComboBox.SelectedItem?.ToString() ?? "";
-            string targetUrl = "https://www.likefont.com/"; // 默认值
 
-            if (selectedSite.Contains("AI识别（YuzuMarker.FontDetection）"))
+            // 直接从字典查找 URL，找不到则给个默认值
+            if (!_ocrSites.TryGetValue(selectedSite, out string targetUrl))
             {
-                targetUrl = "https://huggingface.co/spaces/gyrojeff/YuzuMarker.FontDetection"; // 举例
-            }
-            else if (selectedSite.Contains("识字体网 (LikeFont)"))
-            {
-                targetUrl = "https://www.likefont.com/";
+                targetUrl = "https://www.baidu.com";
             }
             // 检查是否已经有名为 "OCRContainer" 的窗体在运行
             Form existing = Application.OpenForms["OCRContainer"];
@@ -1314,35 +1347,135 @@ namespace mylabel
             webView.EnsureCoreWebView2Async();
             container.Show();
         }
-        #endregion
+        private ContextMenuStrip _ocrMenu;
 
-
-
-        #region 界面美化(记得在Load中引用)
-        private int radius = 20;
-        private void BeautifyUI()
+        private void InitOCRManagementMenu()
         {
-            //Parampanel2_Resize(null, null);
-            //LabelViewpanel_Resize(null, null);
-        }
-        private bool isDarkMode = false;
+            _ocrMenu = new ContextMenuStrip();
 
-        private void DarkorWhiteMode_Click(object sender, EventArgs e)
+            // 添加“新增”菜单项
+            var addMenuItem = new ToolStripMenuItem("➕ 添加新网站");
+            addMenuItem.Click += btnAddOCRSite_Click;
+
+            // 添加“删除”菜单项
+            var delMenuItem = new ToolStripMenuItem("❌ 删除当前选中网站");
+            delMenuItem.Click += btnDeleteOCRSite_Click;
+
+            _ocrMenu.Items.Add(addMenuItem);
+            _ocrMenu.Items.Add(new ToolStripSeparator()); // 分割线
+            _ocrMenu.Items.Add(delMenuItem);
+        }
+        private void btnAddOCRSite_Click(object sender, EventArgs e)
         {
-            // 一键切换
-            ThemeManager.ToggleTheme(this);
-            // 关键：重新调用一次 SetMode，刷新当前处于激活状态按钮的颜色
-            if (_currentDownAction == DoOCRMouseDown) SetMode("OCR");
-            else if (_currentDownAction == DoTextReviewMouseDown) SetMode("TextReview");
-            else SetMode("LabelMode");
-            TextBox_FocusChanged(LabelTextBox, null); TextBox_FocusChanged(RemarktextBox, null);
-            PicView.Invalidate();
+            // 1. 动态创建一个小型对话框
+            using (Form prompt = new Form())
+            {
+                prompt.Width = 400;
+                prompt.Height = 220;
+                prompt.FormBorderStyle = FormBorderStyle.FixedDialog;
+                prompt.Text = "添加 OCR 网站";
+                prompt.StartPosition = FormStartPosition.CenterParent;
+
+                // 2. 创建控件
+                Label lblName = new Label() { Left = 20, Top = 20, Text = "网站名称:", Width = 350 };
+                TextBox txtName = new TextBox() { Left = 20, Top = 45, Width = 340, Text = "新网站" };
+
+                Label lblUrl = new Label() { Left = 20, Top = 80, Text = "网站网址 (URL):", Width = 350 };
+                TextBox txtUrl = new TextBox() { Left = 20, Top = 105, Width = 340, Text = "https://" };
+
+                Button confirmation = new Button() { Text = "确定", Left = 160, Width = 100, Top = 145, DialogResult = DialogResult.OK };
+                Button cancel = new Button() { Text = "取消", Left = 270, Width = 90, Top = 145, DialogResult = DialogResult.Cancel };
+
+                prompt.Controls.AddRange(new Control[] { lblName, txtName, lblUrl, txtUrl, confirmation, cancel });
+                prompt.AcceptButton = confirmation; // 按回车键直接确认
+
+                // 3. 显示窗口并处理结果
+                if (prompt.ShowDialog() == DialogResult.OK)
+                {
+                    string name = txtName.Text.Trim();
+                    string rawUrl = txtUrl.Text.Trim();
+
+                    // 使用严谨的校验逻辑
+                    string validatedUrl = GetValidatedUrl(rawUrl);
+
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        MessageBox.Show("名称不能为空！");
+                        return;
+                    }
+
+                    if (validatedUrl == null)
+                    {
+                        MessageBox.Show("网址格式不正确！必须包含有效的域名且以 http/https 开头。");
+                        return;
+                    }
+
+                    // 保存并更新 UI
+                    _ocrSites[name] = validatedUrl;
+                    InitOCRComboBox();
+                    OCRComboBox.SelectedItem = name;
+                    //SaveOCRSites(); // 保存到本地配置
+                }
+            }
+        }
+
+        // 辅助方法：严谨的 URL 校验与修复
+        private string GetValidatedUrl(string inputUrl)
+        {
+            if (string.IsNullOrWhiteSpace(inputUrl)) return null;
+            string target = inputUrl.Trim();
+
+            // 自动补全
+            if (!target.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !target.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                target = "https://" + target;
+            }
+
+            if (Uri.TryCreate(target, UriKind.Absolute, out Uri validatedUri) &&
+               (validatedUri.Scheme == Uri.UriSchemeHttp || validatedUri.Scheme == Uri.UriSchemeHttps))
+            {
+                if (validatedUri.Host.Contains(".")) return validatedUri.AbsoluteUri;
+            }
+            return null;
+        }
+        private void btnDeleteOCRSite_Click(object sender, EventArgs e)
+        {
+            string selected = OCRComboBox.SelectedItem?.ToString();
+            if (string.IsNullOrEmpty(selected)) return;
+
+            var result = MessageBox.Show($"确定要删除 [{selected}] 吗？", "提示", MessageBoxButtons.YesNo);
+            if (result == DialogResult.Yes)
+            {
+                _ocrSites.Remove(selected);
+                InitOCRComboBox();
+            }
+        }
+        private void ChangeOCRWeb_Click(object sender, EventArgs e)
+        {
+            // 1. 确保菜单已初始化
+            if (_ocrMenu == null) InitOCRManagementMenu();
+
+            // 2. 动态判断“删除”项是否可用（通过文本查找比索引安全）
+            foreach (ToolStripItem item in _ocrMenu.Items)
+            {
+                if (item.Text.Contains("删除"))
+                {
+                    item.Enabled = OCRComboBox.SelectedItem != null;
+                    break;
+                }
+            }
+
+            // 3. 处理 ToolStripItem 类型的弹出位置
+            if (sender is ToolStripItem toolItem)
+            {
+                // ToolStripItem 没有 .Height 属性，但有 .Bounds 属性
+                // 弹出在按钮的左下角
+                _ocrMenu.Show(toolItem.Owner, new Point(toolItem.Bounds.Left, toolItem.Bounds.Bottom));
+            }
+
         }
         #endregion
-
-
-
-
         #region Group相关
         private string _currentSelectedGroup = "框内";
         private bool _isUpdatingUIFromCode = false; // 防止死循环的锁
@@ -1474,7 +1607,7 @@ namespace mylabel
             flowGroups.ResumeLayout();
             _isUpdatingUIFromCode = false; // 释放锁
         }
-        
+
 
         private void UpdateGroupSelectionUI(string groupName)// 辅助方法：根据标签的组别，自动选中对应的 RadioButton
         {
@@ -1498,6 +1631,8 @@ namespace mylabel
             }
         }
         #endregion
+
+
     }
 
 }

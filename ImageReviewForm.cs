@@ -26,8 +26,8 @@ namespace mylabel
             _mainOwner = owner; // 拿到主窗口的“遥控器”
         }
         #endregion
-        private string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".webp" };
-        private string[] archiveExts = { ".zip", ".7z", ".rar" };
+        private List<string> imageExtensions = new List<string> { ".jpg", ".png", ".bmp", ".jpeg" ,".webp"};
+        private List<string> archiveExts = new List<string> { ".zip", ".7z", ".rar" };
 
         private class ViewState
         {
@@ -65,7 +65,7 @@ namespace mylabel
         private Point mouseDownLocation;
         private bool isDragging = false;
         private bool isPotentialClick = false; // 用来标记是否可能是点击
-        private bool isLinked = false;
+        private bool isLinked = true;
         private const int ClickThreshold = 5; // 像素阈值
 
 
@@ -90,6 +90,21 @@ namespace mylabel
         public ImageReviewForm()
         {
             InitializeComponent();
+
+        }
+        
+        private void ImageReviewForm_Load(object sender, EventArgs e)
+        {
+            InitGpuControls();
+            // 强制开启 PictureBox 的双缓冲
+            var prop = typeof(Control).GetProperty("DoubleBuffered",
+                       System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            Modules.ThemeManager.ApplyTheme(this);
+
+            InitPreviewPopup();
+
+            UpdateLinkViewUI();
         }
         #region GPU渲染
         private void InitGpuControls()
@@ -147,18 +162,6 @@ namespace mylabel
         }
 
         #endregion
-        private void ImageReviewForm_Load(object sender, EventArgs e)
-        {
-            InitGpuControls();
-            // 强制开启 PictureBox 的双缓冲
-            var prop = typeof(Control).GetProperty("DoubleBuffered",
-                       System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            Modules.ThemeManager.ApplyTheme(this);
-            // 根据 isLinked 的初始值设置按钮颜色
-            LinkView_Click(null, null);
-            InitPreviewPopup();
-        }
         #region 图像绘制
         private void PicView_PaintSurface(object sender, SKPaintGLSurfaceEventArgs e)
         {
@@ -431,6 +434,10 @@ namespace mylabel
         // 辅助方法：清空图片并重置状态
         private void ClearPictureBox(Control pb)
         {
+            if (pb == null) return;
+
+            // 检查字典是否初始化（防止在构造函数中过早调用）
+            if (_viewStates == null) return;
             // 1. 检查字典中是否有该控件的状态
             if (_viewStates.ContainsKey(pb))
             {
@@ -544,22 +551,45 @@ namespace mylabel
             ResetView(PicReview1);
             ResetView(PicReview2);
         }
+        private void ImageReviewForm_SizeChanged(object sender, EventArgs e)
+        {
+            // 防御性检查：如果是最小化，则不处理
+            if (this.WindowState == FormWindowState.Minimized) return;
+
+            // 只有当窗口真的有大小时才重置
+            if (this.Width > 0 && this.Height > 0)
+            {
+                // 直接复用你重置按钮的逻辑
+                ResetView(PicReview1);
+                ResetView(PicReview2);
+
+                // 如果当前是开启了联动模式，重置后确保两边依然同步
+                if (isLinked)
+                {
+                    SyncView(PicReview1, PicReview2);
+                }
+            }
+        }
         private void LinkView_Click(object sender, EventArgs e)
         {
-            isLinked = !isLinked;
+            isLinked = !isLinked; // 切换状态
+
+            UpdateLinkViewUI();   // 更新视觉
+
+            if (isLinked) SyncView(PicReview1, PicReview2);
+        }
+        private void UpdateLinkViewUI()
+        {
             bool isDark = Modules.ThemeManager.IsDarkMode;
             Color activeBg = Modules.ThemeManager.AccentColor;
             Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : Color.OldLace;
             Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
             Color defaultFore = Modules.ThemeManager.TextColor;
-            // 1. UI 视觉反馈
+
+            // 根据当前的 isLinked 状态设置颜色
             LinkView.BackColor = isLinked ? activeBg : defaultBg;
             LinkView.ForeColor = isLinked ? activeFore : defaultFore;
-
-            // 开启瞬间先做一次对齐
-            if (isLinked) ToRight_Click(null, null);
         }
-
         private void ToRight_Click(object sender, EventArgs e) => SyncView(PicReview1, PicReview2);
         private void ToLeft_Click(object sender, EventArgs e) => SyncView(PicReview2, PicReview1);
 
@@ -1423,11 +1453,6 @@ namespace mylabel
         #endregion
 
 
-
-        private void ImageReviewForm_SizeChanged(object sender, EventArgs e)
-        {
-            FittoReViewButton_Click(null, null);
-        }
     }
 
 }
