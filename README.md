@@ -7,7 +7,8 @@
 ---
 
 ## 📸 界面展示（以最新版为准）
-<img width="45%"  alt="image" src="https://github.com/user-attachments/assets/c6c7a5bb-0f86-4b9d-b245-7dcf4d84c2e4" /> <img width="45%"  alt="image" src="https://github.com/user-attachments/assets/795c712a-c2dc-4332-b41e-ffd50f340ec0" />
+<img width="45%"  alt="image" src="https://github.com/user-attachments/assets/e51beca6-7408-4950-b194-948709dc2812" />
+ <img width="45%"  alt="image" src="https://github.com/user-attachments/assets/795c712a-c2dc-4332-b41e-ffd50f340ec0" />
 
 ---
 
