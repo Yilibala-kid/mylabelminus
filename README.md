@@ -51,7 +51,7 @@
  
  Visual Studio：提供开发界面与窗口设计支持
 
- [YuzuMarker.FontDetection](YuzuMarker.FontDetection)：提供字体识别功能
+[YuzuMarker.FontDetection](https://gyrojeff-yuzumarker-fontdetection.hf.space)：提供字体识别功能
 
 
 ---
