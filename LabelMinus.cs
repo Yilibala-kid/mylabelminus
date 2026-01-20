@@ -231,8 +231,7 @@ namespace mylabel
             "A/D：上一张图片/下一张图片\n" +
             "W/S：上一个标记/下一个标记\n" +
             "R：适应屏幕\n" +
-            "ctrl+Z/ctrl+Y  :  撤销/重做对上一个标记的改动\n" +
-            "支持右键点击图片中的标记直接删除";
+            "ctrl+Z/ctrl+Y  :  撤销/重做对上一个标记的改动\n";
         private void PicView_Paint(object sender, PaintEventArgs e)
         {
             if (image == null)
@@ -302,7 +301,7 @@ namespace mylabel
                 }
 
                 // 3. 画截图框的虚线边框
-                using (Pen p = new Pen(Color.Cyan, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+                using (Pen p = new Pen(Color.Red, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
                 {
                     e.Graphics.DrawRectangle(p, ocrRect);
                 }
@@ -346,6 +345,8 @@ namespace mylabel
         private Point _rightClickStartPoint;
         private bool isDragging = false;
         private bool isPotentialClick = false; // 用来标记是否可能是点击
+        private bool isXLocked = false; // 是否锁定横向（左右）
+        private bool isYLocked = false; // 是否锁定竖直（上下）
         private const int ClickThreshold = 5; // 像素阈值
 
 
@@ -591,9 +592,24 @@ namespace mylabel
         // 处理图片平移的通用逻辑
         private void MoveImageOffset(Point currentPos)
         {
-            offset.X += currentPos.X - mouseDownLocation.X;
-            offset.Y += currentPos.Y - mouseDownLocation.Y;
+            // 计算本次移动的增量
+            float deltaX = currentPos.X - mouseDownLocation.X;
+            float deltaY = currentPos.Y - mouseDownLocation.Y;
+
+            // 根据锁定状态应用偏移
+            if (!isXLocked) // 只有未锁定时，才改变横向偏移
+            {
+                offset.X += deltaX;
+            }
+
+            if (!isYLocked) // 只有未锁定时，才改变竖直偏移
+            {
+                offset.Y += deltaY;
+            }
+
+            // 无论是否锁定，都要更新鼠标位置起点，否则增量会不断累积导致“瞬移”
             mouseDownLocation = currentPos;
+
             PicView.Invalidate();
         }
 
@@ -736,13 +752,40 @@ namespace mylabel
         #endregion
         private void PicView_MouseWheel(object sender, MouseEventArgs e)
         {
-            float oldScale = scale;
-            if (e.Delta > 0) scale *= 1.1f;
-            else scale /= 1.1f;
+            // 1. 如果两个都锁定了，直接不动，退出函数
+            if (isXLocked && isYLocked)
+            {
+                return;
+            }
+            // 基础移动步长（可以根据需要调整，e.Delta 通常是 120 的倍数）
+            float scrollStep = e.Delta/2;
 
-            // 缩放围绕鼠标位置
-            offset.X = e.X - (e.X - offset.X) * (scale / oldScale);
-            offset.Y = e.Y - (e.Y - offset.Y) * (scale / oldScale);
+            // 情况 A：如果 X 或 Y 被锁定，执行平移逻辑
+            if (isXLocked || isYLocked)
+            {
+                if (isXLocked)
+                {
+                    // X 轴锁定：滚轮控制上下平移 (Y轴移动)
+                    offset.Y += scrollStep;
+                }
+
+                if (isYLocked)
+                {
+                    // Y 轴锁定：滚轮控制左右平移 (X轴移动)
+                    offset.X += scrollStep;
+                }
+            }
+            // 情况 B：都没有锁定，执行原本的缩放逻辑
+            else
+            {
+                float oldScale = scale;
+                if (e.Delta > 0) scale *= 1.1f;
+                else scale /= 1.1f;
+
+                // 缩放围绕鼠标位置
+                offset.X = e.X - (e.X - offset.X) * (scale / oldScale);
+                offset.Y = e.Y - (e.Y - offset.Y) * (scale / oldScale);
+            }
 
             PicView.Invalidate();
         }
@@ -766,6 +809,7 @@ namespace mylabel
                 .Select(f => new ImageInfo { ImageName = Path.GetFileName(f) });
 
             RefreshImageDatabaseUI(infos, sfd.FileName);
+            DoSave(currentTranslationPath);
             MessageBox.Show($"新建成功，识别到 {imageDatabase.Count} 张图片。");
         }
         private void OpenTranslation_Click(object sender, EventArgs e)
@@ -802,7 +846,7 @@ namespace mylabel
                 if (isSaveAs) RefreshImageDatabaseUI(imageDatabase.Values, path); // 另存为需更新当前路径
 
                 _undoManager.MarkAsSaved();
-                MessageBox.Show("保存成功！");
+                //MessageBox.Show("保存成功！");
             }
             catch (Exception ex) { MessageBox.Show($"错误：{ex.Message}"); }
         }
@@ -933,57 +977,76 @@ namespace mylabel
         #region 修改栏
         private void ModifyGroup_Click(object sender, EventArgs e)
         {
-            ContextMenuStrip menu = new ContextMenuStrip();
+            // 弹出管理对话框，并获取用户最后选中的那个组
+            ShowGroupManagementDialog(_availableGroups);
 
-            // --- 1. 添加新分组 ---
-            var addBtn = new ToolStripMenuItem("添加新分组");
-            addBtn.Click += (s, ev) =>
-            {
-                string newGroup = Microsoft.VisualBasic.Interaction.InputBox("请输入新分组名称：", "添加分组", "");
-                if (!string.IsNullOrWhiteSpace(newGroup))
-                {
-                    if (!_availableGroups.Contains(newGroup))
-                    {
-                        _availableGroups.Add(newGroup);
-                        _currentSelectedGroup = newGroup; // 设置新加的为当前选中
-                        BindGroups(_availableGroups);     // 调用“伪绑定”刷新 UI
-                    }
-                    else
-                    {
-                        MessageBox.Show("该分组已存在");
-                    }
-                }
-            };
-
-            // --- 2. 删除当前分组 ---
-            var delBtn = new ToolStripMenuItem("删除当前选中分组");
-            delBtn.Click += (s, ev) =>
-            {
-                if (string.IsNullOrEmpty(_currentSelectedGroup)) return;
-
-                // 基础保护：防止误删核心分组
-                if (_currentSelectedGroup == "框内" || _currentSelectedGroup == "框外")
-                {
-                    MessageBox.Show("基础分组 ['框内', '框外'] 不允许删除。");
-                    return;
-                }
-
-                var result = MessageBox.Show($"确定要删除分组 [{_currentSelectedGroup}] 吗？", "确认删除", MessageBoxButtons.YesNo);
-                if (result == DialogResult.Yes)
-                {
-                    _availableGroups.Remove(_currentSelectedGroup);
-
-                    // 删除后重新选择一个默认组
-                    _currentSelectedGroup = _availableGroups.FirstOrDefault() ?? "";
-                    BindGroups(_availableGroups);
-                }
-            };
-
-            menu.Items.Add(addBtn);
-            menu.Items.Add(delBtn);
-            menu.Show(Control.MousePosition);
+            // 刷新主界面上的 ComboBox 或列表
+            BindGroups(_availableGroups);
         }
 
+        private void ShowGroupManagementDialog(List<string> availableGroups)
+        {
+            using (Form form = new Form())
+            {
+                form.Text = "管理分组";
+                form.Size = new Size(300, 320);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
+
+                // 1. 顶部提示
+                Label lbl = new Label { Text = "当前所有分组列表：", Dock = DockStyle.Top, Height = 30, TextAlign = ContentAlignment.MiddleLeft };
+
+                // 2. 纯列表显示
+                ListBox lb = new ListBox { Dock = DockStyle.Top, Height = 200, Font = new Font("微软雅黑", 10) };
+                foreach (var g in availableGroups) lb.Items.Add(g);
+
+                // 3. 按钮区
+                Button btnAdd = new Button { Text = "添加新组", Left = 55, Top = 230, Width = 80, Height = 30 };
+                btnAdd.Click += (s, e) =>
+                {
+                    string newGroup = Microsoft.VisualBasic.Interaction.InputBox("请输入新分组名称：", "添加分组", "");
+                    if (!string.IsNullOrWhiteSpace(newGroup) && !availableGroups.Contains(newGroup))
+                    {
+                        availableGroups.Add(newGroup);
+                        lb.Items.Add(newGroup);
+                    }
+                };
+
+                Button btnDel = new Button { Text = "删除选中", Left = 150, Top = 230, Width = 80, Height = 30 };
+                btnDel.Click += (s, e) =>
+                {
+                    if (lb.SelectedItem == null) return;
+                    string target = lb.SelectedItem.ToString();
+
+                    // 基础分组保护
+                    if (target == "框内" || target == "框外")
+                    {
+                        MessageBox.Show("基础分组不允许删除");
+                        return;
+                    }
+
+                    if (MessageBox.Show($"确定删除分组 [{target}] 吗？", "确认", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    {
+                        availableGroups.Remove(target);
+                        lb.Items.Remove(target);
+
+                        // 如果删掉的是主界面正在用的组，重置一下当前选中
+                        if (_currentSelectedGroup == target)
+                            _currentSelectedGroup = availableGroups.FirstOrDefault() ?? "";
+                    }
+                };
+
+
+                form.Controls.AddRange(new Control[] { lb, lbl, btnAdd, btnDel });
+
+                // 显示窗口
+                form.ShowDialog();
+
+                // 无论如何，退出后都刷新主界面的 UI
+                BindGroups(availableGroups);
+            }
+        }
         private void LabelTextFontsize_Click(object sender, EventArgs e)
         {
             ContextMenuStrip fontMenu = new ContextMenuStrip();
@@ -1021,6 +1084,161 @@ namespace mylabel
             // 同时应用到两个输入框，保持视觉统一
             LabelTextBox.Font = newFont;
         }// 通用的字体缩放方法
+
+        private void Changeimageinfo_Click(object sender, EventArgs e)
+        {
+            // 1. 检查前提条件
+            if (string.IsNullOrEmpty(currentTranslationPath))
+            {
+                MessageBox.Show("请先打开或新建一个翻译文件！", "提示");
+                return;
+            }
+
+            string folderPath = Path.GetDirectoryName(currentTranslationPath);
+            if (!Directory.Exists(folderPath)) return;
+
+            // 2. 扫描文件夹中所有的物理图片文件
+            var diskFiles = Directory.EnumerateFiles(folderPath)
+                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                .Select(f => Path.GetFileName(f))
+                .OrderBy(n => n)
+                .ToList();
+
+            if (diskFiles.Count == 0)
+            {
+                MessageBox.Show("当前文件夹下没有找到支持的图片。", "提示");
+                return;
+            }
+
+            // 3. 弹出多选框，并预勾选【已经在数据库中】的图片
+            // 传入当前数据库中已有的 Key 列表作为预选参考
+            List<string> currentlyInDb = imageDatabase.Keys.ToList();
+            List<string> selectedFiles = ShowImageSelectionDialog(diskFiles, currentlyInDb);
+
+            if (selectedFiles == null) return; // 用户点击了取消
+
+            // 4. 更新 imageDatabase
+            // A. 移除用户【取消勾选】的图片
+            var keysToRemove = imageDatabase.Keys.Where(k => !selectedFiles.Contains(k)).ToList();
+            foreach (var key in keysToRemove)
+            {
+                imageDatabase.Remove(key);
+            }
+
+            // B. 添加用户【新勾选】的图片
+            foreach (var fileName in selectedFiles)
+            {
+                if (!imageDatabase.ContainsKey(fileName))
+                {
+                    imageDatabase.Add(fileName, new ImageInfo { ImageName = fileName });
+                }
+            }
+
+            // 5. 刷新 UI 和 保存文件
+            // 这里的 RefreshImageDatabaseUI 需要能接受 Dictionary 或 Values
+            RefreshImageDatabaseUI(imageDatabase.Values.ToList(), currentTranslationPath);
+
+            // 调用你之前的保存逻辑
+            //string content = LabelsToText(imageDatabase, ExportMode.Current);
+            //File.WriteAllText(currentTranslationPath, content, System.Text.Encoding.UTF8);
+
+            MessageBox.Show($"更新完毕！当前文档包含 {imageDatabase.Count} 张图片。", "成功");
+        }
+        private List<string> ShowImageSelectionDialog(List<string> allDiskFiles, List<string> currentlyInDb)
+        {
+            using (Form form = new Form())
+            {
+                form.Text = "管理项目图片：请勾选要保留在翻译文档中的文件";
+                form.Size = new Size(450, 550);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+
+                Label lblTip = new Label { Text = "勾选即代表该图片会出现在翻译列表中：", Dock = DockStyle.Top, Height = 30 };
+                CheckedListBox clb = new CheckedListBox { Dock = DockStyle.Top, Height = 400, CheckOnClick = true };
+
+                // 填充列表并设置勾选状态
+                foreach (var file in allDiskFiles)
+                {
+                    bool isExisting = currentlyInDb.Contains(file);
+                    string displayName = isExisting ? file : $"[新发现] {file}";
+                    clb.Items.Add(file, isExisting); // 只有原本就在数据库里的才默认勾选
+                }
+
+                Button btnAll = new Button { Text = "全选", Left = 10, Top = 450, Width = 60 };
+                btnAll.Click += (s, e) => { for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, true); };
+
+                Button btnNone = new Button { Text = "全不选", Left = 80, Top = 450, Width = 70 };
+                btnNone.Click += (s, e) => { for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, false); };
+
+                Button btnOk = new Button { Text = "确定同步", DialogResult = DialogResult.OK, Left = 240, Top = 470, Width = 90 };
+                Button btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Left = 340, Top = 470, Width = 80 };
+
+                form.Controls.AddRange(new Control[] { clb, lblTip, btnAll, btnNone, btnOk, btnCancel });
+                form.AcceptButton = btnOk;
+
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    return clb.CheckedItems.Cast<string>().ToList();
+                }
+                return null;
+            }
+        }
+
+        private void CompressPic_Click(object sender, EventArgs e)//加载压缩图片
+        {
+            RefreshImageDisplay();
+        }
+        private void RefreshImageDisplay()
+        {
+            // 1. 调用你那个“不动”的原版安全加载函数
+            LoadImageSafe();
+
+            // 2. 如果加载成功，且用户开启了压缩模式
+            if (image != null && CompressPic.Checked)
+            {
+                // 记录原始尺寸（如果后续坐标换算需要的话）
+                // Size originalSize = image.Size; 
+
+                // 调用压缩函数（限制在 2048px）
+                Image compressed = GetScaledImage(image, 2048);
+
+                // 释放原图，替换为压缩图
+                image.Dispose();
+                image = compressed;
+            }
+
+            // 3. 无论是否压缩，最后执行重绘
+            fittoview();
+            PicView.Invalidate();
+        }
+        private Image GetScaledImage(Image sourceImage, int maxSide)
+        {
+            if (sourceImage == null) return null;
+
+            // 1. 如果图片本身就比限制尺寸小，直接克隆一份返回，不浪费计算量
+            if (sourceImage.Width <= maxSide && sourceImage.Height <= maxSide)
+            {
+                return new Bitmap(sourceImage);
+            }
+
+            // 2. 计算等比例缩小的尺寸
+            float scale = Math.Min((float)maxSide / sourceImage.Width, (float)maxSide / sourceImage.Height);
+            int newWidth = (int)(sourceImage.Width * scale);
+            int newHeight = (int)(sourceImage.Height * scale);
+
+            // 3. 创建画布并重绘
+            Bitmap bmp = new Bitmap(newWidth, newHeight);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                // 设置高质量压缩选项，防止图片里的字变模糊
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+                g.DrawImage(sourceImage, 0, 0, newWidth, newHeight);
+            }
+            return bmp;
+        }
         #endregion
 
 
@@ -1075,8 +1293,9 @@ namespace mylabel
             // 3. 重新初始化快照指针
             _lastSelectedLabel = imageLabelBindingSource.Current as ImageLabel;
             _snapshotBeforeEdit = _lastSelectedLabel?.Clone();
-            LoadImageSafe();
-            PicView.Invalidate();
+            //LoadImageSafe();
+            RefreshImageDisplay();
+            //PicView.Invalidate();
         }
 
         private ImageLabel _snapshotBeforeEdit; // 编辑前的快照
@@ -1141,6 +1360,7 @@ namespace mylabel
                 image = null;
             }
         }
+
         private void ApplyFilter()// 过滤方法
         {
             // 以后只需这一行，语义更清晰
@@ -1171,11 +1391,7 @@ namespace mylabel
         private int radius = 20;
         private void BeautifyUI()
         {
-            //Parampanel2_Resize(null, null);
-            //LabelViewpanel_Resize(null, null);
         }
-        private bool isDarkMode = false;
-
         private void DarkorWhiteMode_Click(object sender, EventArgs e)
         {
             // 一键切换
@@ -1185,6 +1401,8 @@ namespace mylabel
             else if (_currentDownAction == DoTextReviewMouseDown) SetMode("TextReview");
             else SetMode("LabelMode");
             TextBox_FocusChanged(LabelTextBox, null); TextBox_FocusChanged(RemarktextBox, null);
+            UpdateLockButtonUI(LockX, isXLocked);
+            UpdateLockButtonUI(LockY, isYLocked);
             PicView.Invalidate();
         }
         #endregion
@@ -1630,7 +1848,11 @@ namespace mylabel
                 _isUpdatingUIFromCode = false; // 释放锁
             }
         }
+
         #endregion
+
+        
+
 
 
     }

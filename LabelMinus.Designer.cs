@@ -46,6 +46,8 @@
             ModifyGroup = new ToolStripMenuItem();
             LabelTextFontsize = new ToolStripMenuItem();
             ChangeOCRWeb = new ToolStripMenuItem();
+            Changeimageinfo = new ToolStripMenuItem();
+            CompressPic = new ToolStripMenuItem();
             ExportText = new ToolStripMenuItem();
             ExportOriginal = new ToolStripMenuItem();
             ExportCurrent = new ToolStripMenuItem();
@@ -74,11 +76,17 @@
             splitContainer1 = new SplitContainer();
             Picpanel = new Panel();
             bottompanel = new Panel();
+            PicFitPanel = new Panel();
+            LockX = new Button();
+            iconList = new ImageList(components);
+            LockY = new Button();
+            FitToHeight = new Button();
+            FitToWidth = new Button();
+            FittoViewbutton = new Button();
             PicNameLabel = new Label();
             PicName = new ComboBox();
             LPbutton = new Button();
             NPbutton = new Button();
-            FittoViewbutton = new Button();
             LabelViewpanel = new Panel();
             Parampanel = new Panel();
             GroupPanel = new Panel();
@@ -119,6 +127,7 @@
             splitContainer1.SuspendLayout();
             Picpanel.SuspendLayout();
             bottompanel.SuspendLayout();
+            PicFitPanel.SuspendLayout();
             LabelViewpanel.SuspendLayout();
             Parampanel.SuspendLayout();
             GroupPanel.SuspendLayout();
@@ -134,7 +143,7 @@
             PicView.Dock = DockStyle.Fill;
             PicView.Location = new Point(0, 0);
             PicView.Name = "PicView";
-            PicView.Size = new Size(500, 652);
+            PicView.Size = new Size(600, 452);
             PicView.TabIndex = 0;
             PicView.TabStop = false;
             PicView.Paint += PicView_Paint;
@@ -163,41 +172,42 @@
             // NewTranslation
             // 
             NewTranslation.Name = "NewTranslation";
-            NewTranslation.Size = new Size(180, 22);
+            NewTranslation.Size = new Size(160, 22);
             NewTranslation.Text = "新建翻译";
             NewTranslation.Click += NewTranslation_Click;
             // 
             // OpenTranslation
             // 
             OpenTranslation.Name = "OpenTranslation";
-            OpenTranslation.Size = new Size(180, 22);
+            OpenTranslation.Size = new Size(160, 22);
             OpenTranslation.Text = "打开翻译";
             OpenTranslation.Click += OpenTranslation_Click;
             // 
             // SaveTranslation
             // 
             SaveTranslation.Name = "SaveTranslation";
-            SaveTranslation.Size = new Size(180, 22);
+            SaveTranslation.Size = new Size(160, 22);
             SaveTranslation.Text = "保存翻译";
             SaveTranslation.Click += SaveTranslation_Click;
             // 
             // SaveAsTranslation
             // 
             SaveAsTranslation.Name = "SaveAsTranslation";
-            SaveAsTranslation.Size = new Size(180, 22);
+            SaveAsTranslation.Size = new Size(160, 22);
             SaveAsTranslation.Text = "另存为翻译";
             SaveAsTranslation.Click += SaveAsTranslation_Click;
             // 
             // OpenNowFolder
             // 
             OpenNowFolder.Name = "OpenNowFolder";
-            OpenNowFolder.Size = new Size(180, 22);
+            OpenNowFolder.Size = new Size(160, 22);
             OpenNowFolder.Text = "打开工作文件夹";
             OpenNowFolder.Click += OpenNowFolder_Click;
             // 
             // ModifyMenu
             // 
-            ModifyMenu.DropDownItems.AddRange(new ToolStripItem[] { ModifyGroup, LabelTextFontsize, ChangeOCRWeb });
+            ModifyMenu.CheckOnClick = true;
+            ModifyMenu.DropDownItems.AddRange(new ToolStripItem[] { ModifyGroup, LabelTextFontsize, ChangeOCRWeb, Changeimageinfo, CompressPic });
             ModifyMenu.Name = "ModifyMenu";
             ModifyMenu.Size = new Size(44, 21);
             ModifyMenu.Text = "修改";
@@ -206,22 +216,39 @@
             // 
             ModifyGroup.Name = "ModifyGroup";
             ModifyGroup.Size = new Size(160, 22);
-            ModifyGroup.Text = "修改组别";
+            ModifyGroup.Text = "组别";
             ModifyGroup.Click += ModifyGroup_Click;
             // 
             // LabelTextFontsize
             // 
             LabelTextFontsize.Name = "LabelTextFontsize";
             LabelTextFontsize.Size = new Size(160, 22);
-            LabelTextFontsize.Text = "修改文本框字号";
+            LabelTextFontsize.Text = "文本框字号";
             LabelTextFontsize.Click += LabelTextFontsize_Click;
             // 
             // ChangeOCRWeb
             // 
             ChangeOCRWeb.Name = "ChangeOCRWeb";
             ChangeOCRWeb.Size = new Size(160, 22);
-            ChangeOCRWeb.Text = "修改OCR网站";
+            ChangeOCRWeb.Text = "OCR网站";
             ChangeOCRWeb.Click += ChangeOCRWeb_Click;
+            // 
+            // Changeimageinfo
+            // 
+            Changeimageinfo.Name = "Changeimageinfo";
+            Changeimageinfo.Size = new Size(160, 22);
+            Changeimageinfo.Text = "调整翻译图片集";
+            Changeimageinfo.Click += Changeimageinfo_Click;
+            // 
+            // CompressPic
+            // 
+            CompressPic.Checked = true;
+            CompressPic.CheckOnClick = true;
+            CompressPic.CheckState = CheckState.Checked;
+            CompressPic.Name = "CompressPic";
+            CompressPic.Size = new Size(160, 22);
+            CompressPic.Text = "流畅图片显示";
+            CompressPic.Click += CompressPic_Click;
             // 
             // ExportText
             // 
@@ -260,27 +287,37 @@
             // 
             // BothShow
             // 
+            BothShow.Checked = true;
+            BothShow.CheckOnClick = true;
+            BothShow.CheckState = CheckState.Checked;
             BothShow.Name = "BothShow";
             BothShow.Size = new Size(148, 22);
             BothShow.Text = "列表与文本框";
+            BothShow.Click += BothShow_Click;
             // 
             // LabelViewOnly
             // 
+            LabelViewOnly.CheckOnClick = true;
             LabelViewOnly.Name = "LabelViewOnly";
             LabelViewOnly.Size = new Size(148, 22);
-            LabelViewOnly.Text = "仅标记列表";
+            LabelViewOnly.Text = "仅列表";
+            LabelViewOnly.Click += LabelViewOnly_Click;
             // 
             // LabelTextBoxOnly
             // 
+            LabelTextBoxOnly.CheckOnClick = true;
             LabelTextBoxOnly.Name = "LabelTextBoxOnly";
             LabelTextBoxOnly.Size = new Size(148, 22);
             LabelTextBoxOnly.Text = "仅文本框";
+            LabelTextBoxOnly.Click += LabelTextBoxOnly_Click;
             // 
             // ParamHide
             // 
+            ParamHide.CheckOnClick = true;
             ParamHide.Name = "ParamHide";
             ParamHide.Size = new Size(148, 22);
             ParamHide.Text = "次要参数";
+            ParamHide.Click += ParamHide_Click;
             // 
             // LabelView
             // 
@@ -319,7 +356,7 @@
             LabelView.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
             LabelView.RowHeadersVisible = false;
             LabelView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            LabelView.Size = new Size(464, 188);
+            LabelView.Size = new Size(364, 0);
             LabelView.TabIndex = 2;
             LabelView.CellMouseDown += LabelView_CellMouseClick;
             // 
@@ -453,8 +490,8 @@
             splitContainer1.Panel2.Controls.Add(Parampanel);
             splitContainer1.Panel2.Margin = new Padding(3);
             splitContainer1.Panel2.Padding = new Padding(0, 0, 10, 0);
-            splitContainer1.Size = new Size(984, 694);
-            splitContainer1.SplitterDistance = 500;
+            splitContainer1.Size = new Size(984, 494);
+            splitContainer1.SplitterDistance = 600;
             splitContainer1.TabIndex = 3;
             // 
             // Picpanel
@@ -463,34 +500,119 @@
             Picpanel.Dock = DockStyle.Fill;
             Picpanel.Location = new Point(0, 0);
             Picpanel.Name = "Picpanel";
-            Picpanel.Size = new Size(500, 652);
+            Picpanel.Size = new Size(600, 452);
             Picpanel.TabIndex = 3;
             // 
             // bottompanel
             // 
             bottompanel.BackColor = Color.PeachPuff;
+            bottompanel.Controls.Add(PicFitPanel);
             bottompanel.Controls.Add(PicNameLabel);
             bottompanel.Controls.Add(PicName);
             bottompanel.Controls.Add(LPbutton);
             bottompanel.Controls.Add(NPbutton);
-            bottompanel.Controls.Add(FittoViewbutton);
             bottompanel.Dock = DockStyle.Bottom;
-            bottompanel.Location = new Point(0, 652);
+            bottompanel.Location = new Point(0, 452);
             bottompanel.Name = "bottompanel";
             bottompanel.Padding = new Padding(3);
-            bottompanel.Size = new Size(500, 42);
+            bottompanel.Size = new Size(600, 42);
             bottompanel.TabIndex = 2;
+            // 
+            // PicFitPanel
+            // 
+            PicFitPanel.Controls.Add(LockX);
+            PicFitPanel.Controls.Add(LockY);
+            PicFitPanel.Controls.Add(FitToHeight);
+            PicFitPanel.Controls.Add(FitToWidth);
+            PicFitPanel.Controls.Add(FittoViewbutton);
+            PicFitPanel.Dock = DockStyle.Left;
+            PicFitPanel.Location = new Point(3, 3);
+            PicFitPanel.Name = "PicFitPanel";
+            PicFitPanel.Size = new Size(150, 36);
+            PicFitPanel.TabIndex = 10;
+            // 
+            // LockX
+            // 
+            LockX.Dock = DockStyle.Left;
+            LockX.ImageIndex = 3;
+            LockX.ImageList = iconList;
+            LockX.Location = new Point(120, 0);
+            LockX.Name = "LockX";
+            LockX.Size = new Size(30, 36);
+            LockX.TabIndex = 8;
+            LockX.UseVisualStyleBackColor = true;
+            LockX.Click += LockX_Click;
+            // 
+            // iconList
+            // 
+            iconList.ColorDepth = ColorDepth.Depth32Bit;
+            iconList.ImageStream = (ImageListStreamer)resources.GetObject("iconList.ImageStream");
+            iconList.TransparentColor = Color.Transparent;
+            iconList.Images.SetKeyName(0, "图片1.png");
+            iconList.Images.SetKeyName(1, "图片2.png");
+            iconList.Images.SetKeyName(2, "图片3.png");
+            iconList.Images.SetKeyName(3, "图片4.png");
+            iconList.Images.SetKeyName(4, "图片5.png");
+            // 
+            // LockY
+            // 
+            LockY.Dock = DockStyle.Left;
+            LockY.ImageIndex = 4;
+            LockY.ImageList = iconList;
+            LockY.Location = new Point(90, 0);
+            LockY.Name = "LockY";
+            LockY.Size = new Size(30, 36);
+            LockY.TabIndex = 9;
+            LockY.UseVisualStyleBackColor = true;
+            LockY.Click += LockY_Click;
+            // 
+            // FitToHeight
+            // 
+            FitToHeight.Dock = DockStyle.Left;
+            FitToHeight.ImageIndex = 1;
+            FitToHeight.ImageList = iconList;
+            FitToHeight.Location = new Point(60, 0);
+            FitToHeight.Name = "FitToHeight";
+            FitToHeight.Size = new Size(30, 36);
+            FitToHeight.TabIndex = 1;
+            FitToHeight.UseVisualStyleBackColor = true;
+            FitToHeight.Click += FitToHeight_Click;
+            // 
+            // FitToWidth
+            // 
+            FitToWidth.Dock = DockStyle.Left;
+            FitToWidth.ImageIndex = 2;
+            FitToWidth.ImageList = iconList;
+            FitToWidth.Location = new Point(30, 0);
+            FitToWidth.Name = "FitToWidth";
+            FitToWidth.Size = new Size(30, 36);
+            FitToWidth.TabIndex = 1;
+            FitToWidth.UseVisualStyleBackColor = true;
+            FitToWidth.Click += FitToWidth_Click;
+            // 
+            // FittoViewbutton
+            // 
+            FittoViewbutton.Dock = DockStyle.Left;
+            FittoViewbutton.ImageIndex = 0;
+            FittoViewbutton.ImageList = iconList;
+            FittoViewbutton.Location = new Point(0, 0);
+            FittoViewbutton.Name = "FittoViewbutton";
+            FittoViewbutton.Size = new Size(30, 36);
+            FittoViewbutton.TabIndex = 0;
+            FittoViewbutton.UseVisualStyleBackColor = true;
+            FittoViewbutton.Click += FittoView;
             // 
             // PicNameLabel
             // 
             PicNameLabel.Anchor = AnchorStyles.Right;
             PicNameLabel.AutoSize = true;
-            PicNameLabel.Location = new Point(145, 13);
+            PicNameLabel.Location = new Point(339, 13);
             PicNameLabel.Name = "PicNameLabel";
             PicNameLabel.Size = new Size(35, 17);
             PicNameLabel.TabIndex = 7;
             PicNameLabel.Text = "图集:";
             PicNameLabel.TextAlign = ContentAlignment.MiddleCenter;
+            PicNameLabel.Click += Changeimageinfo_Click;
             // 
             // PicName
             // 
@@ -500,7 +622,7 @@
             PicName.DropDownStyle = ComboBoxStyle.DropDownList;
             PicName.Font = new Font("Microsoft YaHei UI", 12F);
             PicName.FormattingEnabled = true;
-            PicName.Location = new Point(184, 6);
+            PicName.Location = new Point(380, 7);
             PicName.Name = "PicName";
             PicName.Size = new Size(161, 29);
             PicName.TabIndex = 6;
@@ -508,35 +630,26 @@
             // LPbutton
             // 
             LPbutton.Dock = DockStyle.Right;
-            LPbutton.Location = new Point(347, 3);
+            LPbutton.Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            LPbutton.Location = new Point(547, 3);
             LPbutton.Name = "LPbutton";
-            LPbutton.Size = new Size(75, 36);
+            LPbutton.Size = new Size(25, 36);
             LPbutton.TabIndex = 4;
-            LPbutton.Text = "上一张";
+            LPbutton.Text = "上";
             LPbutton.UseVisualStyleBackColor = true;
             LPbutton.Click += LP_Click;
             // 
             // NPbutton
             // 
             NPbutton.Dock = DockStyle.Right;
-            NPbutton.Location = new Point(422, 3);
+            NPbutton.Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            NPbutton.Location = new Point(572, 3);
             NPbutton.Name = "NPbutton";
-            NPbutton.Size = new Size(75, 36);
+            NPbutton.Size = new Size(25, 36);
             NPbutton.TabIndex = 3;
-            NPbutton.Text = "下一张";
+            NPbutton.Text = "下";
             NPbutton.UseVisualStyleBackColor = true;
             NPbutton.Click += NP_Click;
-            // 
-            // FittoViewbutton
-            // 
-            FittoViewbutton.Dock = DockStyle.Left;
-            FittoViewbutton.Location = new Point(3, 3);
-            FittoViewbutton.Name = "FittoViewbutton";
-            FittoViewbutton.Size = new Size(75, 36);
-            FittoViewbutton.TabIndex = 0;
-            FittoViewbutton.Text = "适应屏幕";
-            FittoViewbutton.UseVisualStyleBackColor = true;
-            FittoViewbutton.Click += FittoView;
             // 
             // LabelViewpanel
             // 
@@ -546,7 +659,7 @@
             LabelViewpanel.Location = new Point(0, 0);
             LabelViewpanel.Name = "LabelViewpanel";
             LabelViewpanel.Padding = new Padding(3);
-            LabelViewpanel.Size = new Size(470, 194);
+            LabelViewpanel.Size = new Size(370, 0);
             LabelViewpanel.TabIndex = 5;
             // 
             // Parampanel
@@ -557,10 +670,10 @@
             Parampanel.Controls.Add(Textboxpanel);
             Parampanel.Controls.Add(Parampanel1);
             Parampanel.Dock = DockStyle.Bottom;
-            Parampanel.Location = new Point(0, 194);
+            Parampanel.Location = new Point(0, -6);
             Parampanel.Name = "Parampanel";
             Parampanel.Padding = new Padding(0, 40, 0, 10);
-            Parampanel.Size = new Size(470, 500);
+            Parampanel.Size = new Size(370, 500);
             Parampanel.TabIndex = 4;
             // 
             // GroupPanel
@@ -600,7 +713,7 @@
             Textboxpanel.Location = new Point(0, 40);
             Textboxpanel.Name = "Textboxpanel";
             Textboxpanel.Padding = new Padding(3);
-            Textboxpanel.Size = new Size(309, 450);
+            Textboxpanel.Size = new Size(209, 450);
             Textboxpanel.TabIndex = 9;
             // 
             // LabelTextBox
@@ -614,7 +727,7 @@
             LabelTextBox.Location = new Point(3, 3);
             LabelTextBox.Multiline = true;
             LabelTextBox.Name = "LabelTextBox";
-            LabelTextBox.Size = new Size(303, 444);
+            LabelTextBox.Size = new Size(203, 444);
             LabelTextBox.TabIndex = 3;
             LabelTextBox.Enter += TextBox_FocusChanged;
             LabelTextBox.Leave += TextBox_FocusChanged;
@@ -632,7 +745,7 @@
             Parampanel1.Controls.Add(RemarktextBox);
             Parampanel1.Controls.Add(Remarklabel);
             Parampanel1.Dock = DockStyle.Right;
-            Parampanel1.Location = new Point(309, 40);
+            Parampanel1.Location = new Point(209, 40);
             Parampanel1.Name = "Parampanel1";
             Parampanel1.Padding = new Padding(3);
             Parampanel1.Size = new Size(161, 450);
@@ -822,6 +935,7 @@
             // OCRComboBox
             // 
             OCRComboBox.Anchor = AnchorStyles.Left;
+            OCRComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             OCRComboBox.Font = new Font("Microsoft YaHei UI", 10F);
             OCRComboBox.FormattingEnabled = true;
             OCRComboBox.Location = new Point(234, 9);
@@ -866,7 +980,7 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(984, 761);
+            ClientSize = new Size(984, 561);
             Controls.Add(splitContainer1);
             Controls.Add(Toolpanel);
             Controls.Add(Menu);
@@ -892,6 +1006,7 @@
             Picpanel.ResumeLayout(false);
             bottompanel.ResumeLayout(false);
             bottompanel.PerformLayout();
+            PicFitPanel.ResumeLayout(false);
             LabelViewpanel.ResumeLayout(false);
             Parampanel.ResumeLayout(false);
             GroupPanel.ResumeLayout(false);
@@ -981,5 +1096,13 @@
         private ToolStripMenuItem LabelViewOnly;
         private ToolStripMenuItem LabelTextBoxOnly;
         private ToolStripMenuItem ParamHide;
+        private ToolStripMenuItem Changeimageinfo;
+        private Button LockX;
+        private Button LockY;
+        private Panel PicFitPanel;
+        private Button FitToHeight;
+        private Button FitToWidth;
+        private ImageList iconList;
+        private ToolStripMenuItem CompressPic;
     }
 }

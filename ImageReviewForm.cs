@@ -1367,6 +1367,18 @@ namespace mylabel
             {
                 isDrawing = true;
                 lastPt = GetImagePoint(e.X, e.Y);
+                // --- 新增：点击即画一个点 ---
+                using (var paint = new SKPaint
+                {
+                    Color = SKColors.Red,
+                    Style = SKPaintStyle.Fill, // 使用填充模式画点
+                    IsAntialias = true
+                })
+                {
+                    // 画一个半径为 2.5 的圆（对应你 StrokeWidth=5 的效果）
+                    drawingCanvas.DrawCircle(lastPt.X, lastPt.Y, 2.5f, paint);
+                }
+                glControl.Invalidate();
             }
         }
 

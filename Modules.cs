@@ -44,11 +44,16 @@ namespace mylabel.Modules
                 Color finalColor = isSelected ? Color.Purple : groupColor;
 
                 using var themeBrush = new SolidBrush(finalColor);
-
+                // --- A0. 绘制组别 (显示在序号正上方) ---
+                if (onlyShowIndex)
+                {
+                    using var groupFont = new Font("Arial", 20 * imageDpi, FontStyle.Bold, GraphicsUnit.Pixel);
+                    float groupY = y - (20 * imageDpi);
+                    g.DrawString(label.Group, groupFont, themeBrush, x, groupY, centerFormat);// 绘制组别文本
+                }
                 // --- A. 绘制序号 ---
                 string idxStr = label.Index.ToString();
 
-                // 如果没有了圆圈，我们可以给序号加一个极小的阴影或发光，防止在复杂背景下看不清（可选）
                 // 这里直接绘制居中文字
                 g.DrawString(idxStr, indexFont, themeBrush, x, y, centerFormat);
 
@@ -192,10 +197,12 @@ namespace mylabel.Modules
             {
                 var imageInfo = imageDatabase[imageName];
 
-                // 修改点：如果不是 Diff 模式，检查是否存在未删除的标签；如果是 Diff 模式，检查是否有修改
-                bool shouldExportImage = mode == ExportMode.Diff
-                    ? imageInfo.Labels.Any(l => l.IsModified)
-                    : imageInfo.Labels.Any(l => !l.IsDeleted);
+                bool shouldExportImage = true;
+
+                if (mode == ExportMode.Diff)
+                {
+                    shouldExportImage = imageInfo.Labels.Any(l => l.IsModified);
+                }
 
                 if (!shouldExportImage) continue;
 

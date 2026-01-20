@@ -1,6 +1,8 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Windows.Forms;
 
 namespace mylabel
 {
@@ -174,6 +176,46 @@ namespace mylabel
             // 5. 重绘
             PicView.Invalidate();
         }
+
+        private void FitToWidth_Click(object sender, EventArgs e)
+        {
+            if (image == null) return;
+
+            // 1. 获取控件宽度
+            float viewW = PicView.ClientSize.Width;
+            float imgW = image.Width;
+
+            // 2. 缩放比例仅由宽度决定
+            scale = viewW / imgW;
+
+            // 3. 计算偏移：横向居中（实际上是 0），纵向通常置顶
+            // 如果你想让它垂直也居中，可以用 (PicView.ClientSize.Height - image.Height * scale) / 2f
+            offset.X = 0;
+            offset.Y = (PicView.ClientSize.Height - image.Height * scale) / 2f;
+            if (offset.Y < 0) offset.Y = 0;
+            PicView.Invalidate();
+        }
+
+        private void FitToHeight_Click(object sender, EventArgs e)
+        {
+            if (image == null) return;
+
+            // 1. 获取控件高度
+            float viewH = PicView.ClientSize.Height;
+            float imgH = image.Height;
+
+            // 2. 缩放比例仅由高度决定
+            scale = viewH / imgH;
+
+            // 3. 计算偏移：横向通常靠左或居中，纵向为 0
+            // 适应高度并垂直居中
+            offset.X = (PicView.ClientSize.Width - image.Width * scale) / 2f;
+            offset.Y = 0;
+            // 如果计算出的 offset.Y < 0，说明图片比屏幕高，建议强制设为 0 从头显示
+            if (offset.X < 0) offset.X = 0;
+
+            PicView.Invalidate();
+        }
         private void LP_Click(object sender, EventArgs e)
         {
             PicNameBindingSource.MovePrevious();
@@ -203,11 +245,14 @@ namespace mylabel
 
         private void ParamHide_Click(object sender, EventArgs e)
         {
-            Parampanel1.Visible = !Parampanel1.Visible;
+            if (ParamHide.Checked) Parampanel1.Visible = true;
+            else
+                Parampanel1.Visible = false;
         }
 
         private void LabelTextBoxOnly_Click(object sender, EventArgs e)
         {
+            SetMenuChecked(LabelTextBoxOnly);
             LabelViewpanel.Visible = false;
             Parampanel.Visible = true;
             Parampanel.Dock = DockStyle.Fill;
@@ -215,6 +260,7 @@ namespace mylabel
 
         private void LabelViewOnly_Click(object sender, EventArgs e)
         {
+            SetMenuChecked(LabelViewOnly);
             LabelViewpanel.Visible = true;
             Parampanel.Visible = false;
             LabelViewpanel.Dock = DockStyle.Fill;
@@ -222,11 +268,45 @@ namespace mylabel
 
         private void BothShow_Click(object sender, EventArgs e)
         {
+            SetMenuChecked(BothShow);
             LabelViewpanel.Visible = true;
             Parampanel.Visible = true;
             LabelViewpanel.Dock = DockStyle.Fill;
             Parampanel.Dock = DockStyle.Bottom;
 
         }
+        private void SetMenuChecked(ToolStripMenuItem activeItem)
+        {
+            LabelTextBoxOnly.Checked = (activeItem == LabelTextBoxOnly);
+            LabelViewOnly.Checked = (activeItem == LabelViewOnly);
+            BothShow.Checked = (activeItem == BothShow);
+        }
+
+        // 锁定横向按钮 (X 轴不动，只能上下移)
+        private void LockX_Click(object sender, EventArgs e)
+        {
+            isXLocked = !isXLocked;
+            UpdateLockButtonUI(sender as Button, isXLocked);
+        }
+
+        // 锁定竖直按钮 (Y 轴不动，只能左右移)
+        private void LockY_Click(object sender, EventArgs e)
+        {
+            isYLocked = !isYLocked;
+            UpdateLockButtonUI(sender as Button, isYLocked);
+        }
+
+        // 通用的 UI 反馈方法
+        private void UpdateLockButtonUI(Button btn, bool isLocked)
+        {
+            Color oricolor = Modules.ThemeManager.IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+            if (btn != null)
+            {
+                // 改变颜色或图标以示区别
+                btn.BackColor = isLocked ? Color.LightCoral : oricolor;
+            }
+        }
+
+
     }
 }
