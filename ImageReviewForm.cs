@@ -1,12 +1,8 @@
 ﻿using SharpCompress.Archives;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
-using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Drawing.Imaging;
-using System.IO;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 
 
 namespace mylabel
@@ -93,7 +89,7 @@ namespace mylabel
             InitializeComponent();
 
         }
-        
+
         private void ImageReviewForm_Load(object sender, EventArgs e)
         {
             InitGpuControls();
@@ -150,7 +146,10 @@ namespace mylabel
             ctrl.MouseMove += PicView_MouseMove;
             ctrl.MouseWheel += PicView_MouseWheel;
             ctrl.MouseUp += PicView_MouseUp;
-
+            ctrl.AllowDrop = true; // 必须开启
+            ctrl.DragEnter += Control_DragEnter; // 改变鼠标图标
+            bool isLeft = placeholder.Name.ToLower().Contains("1");
+            ctrl.DragDrop += (s, e) => HandleDrop(e, isLeft);
             // --- 在这里初始化字典，确保 Key 是新的 SKControl ---
             _viewStates[ctrl] = new ViewState();
 
@@ -968,7 +967,77 @@ namespace mylabel
         }
         #endregion
 
+        private void Control_DragEnter(object sender, DragEventArgs e)
+        {
+            // 只接受文件拖入
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                e.Effect = DragDropEffects.Copy;
+            else
+                e.Effect = DragDropEffects.None;
+        }
 
+        private void HandleDrop(DragEventArgs e, bool isLeft)
+        {
+            // 获取拖入的文件路径列表
+            string[] paths = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (paths == null || paths.Length == 0) return;
+
+            List<string> finalFiles = new List<string>();
+            string zipPath = null;
+
+            try
+            {
+                string firstPath = paths[0];
+
+                // A. 拖入的是文件夹
+                if (Directory.Exists(firstPath))
+                {
+                    zipPath = null;
+                    finalFiles = Directory.GetFiles(firstPath)
+                        .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                        .OrderBy(f => f)
+                        .ToList();
+                }
+                // B. 拖入的是文件
+                else if (File.Exists(firstPath))
+                {
+                    string ext = Path.GetExtension(firstPath).ToLower();
+
+                    // 如果是单个压缩包
+                    if (paths.Length == 1 && archiveExts.Contains(ext))
+                    {
+                        zipPath = firstPath;
+                        finalFiles = LoadEntriesFromZip(zipPath); // 调用你已有的解压列表方法
+                    }
+                    else
+                    {
+                        // 拖入的是单张或多张图片
+                        zipPath = null;
+                        finalFiles = paths
+                            .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                            .OrderBy(f => f)
+                            .ToList();
+                    }
+                }
+
+                // --- 应用结果到全局变量 ---
+                if (finalFiles.Count > 0)
+                {
+                    if (isLeft) { _leftZipPath = zipPath; _leftFolderFiles = finalFiles; }
+                    else { _rightZipPath = zipPath; _rightFolderFiles = finalFiles; }
+
+                    UpdateComboBox(); // 更新下拉列表显示
+
+                    // 自动选中第一张并触发渲染
+                    if (PicNamecomboBox.Items.Count > 0)
+                        PicNamecomboBox.SelectedIndex = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"拖放处理失败: {ex.Message}");
+            }
+        }
 
 
         #region 截图功能

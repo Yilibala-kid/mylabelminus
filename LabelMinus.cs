@@ -1,23 +1,10 @@
-﻿using LabelMinus;
-using LabelMinus.LabelMinus;
+﻿using LabelMinus.LabelMinus;
 using mylabel.Modules;
-using OpenTK.Platform.Windows;
 using SharpCompress.Archives;
-using SharpCompress.Common;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Drawing.Text;
-using System.Reflection;
-using System.Reflection.Emit;
+using System.Security.Cryptography;
 using System.Text;
-using System.Windows.Forms;
-using System.Xml;
-using System.Xml.Linq;
 using static mylabel.Modules.Modules;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using Button = System.Windows.Forms.Button;
 using ComboBox = System.Windows.Forms.ComboBox;
 using Label = System.Windows.Forms.Label;
@@ -27,7 +14,9 @@ namespace mylabel
     public partial class LabelMinusForm : Form
     {
         private string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".webp" };
+        private string[] archiveExts = { ".zip", ".7z", ".rar" };
 
+        // 顺便检查一下你的图片后缀定义
         private UndoManager _undoManager = new();
         private Dictionary<string, ImageInfo> imageDatabase = new();
 
@@ -55,6 +44,7 @@ namespace mylabel
         #region 窗口加载关闭要做的
         public LabelMinusForm()
         {
+
             InitializeComponent();
             Modules.UIHelper.BindFocusTransfer(this, PicView);
         }
@@ -180,22 +170,34 @@ namespace mylabel
             {
                 try
                 {
-                    string folderPath = Path.Combine(Application.StartupPath, folderName);
+                    string folderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, folderName);
 
-                    if (Directory.Exists(folderPath))
+                    if (!Directory.Exists(folderPath))
                     {
-                        // 使用递归删除：直接把文件夹及其内容全部抹掉
-                        // 第二个参数 true 是关键，它会删除所有子文件夹和文件
-                        Directory.Delete(folderPath, true);
+                        Directory.CreateDirectory(folderPath);
+                        continue;
                     }
 
-                    // 重新创建一个干净的文件夹
-                    Directory.CreateDirectory(folderPath);
+                    // 优化点：不要直接删除文件夹，而是删除文件夹里的内容
+                    DirectoryInfo di = new DirectoryInfo(folderPath);
+
+                    // 1. 直接强力删除所有文件
+                    foreach (FileInfo file in di.EnumerateFiles())
+                    {
+                        try { file.Delete(); }
+                        catch (IOException) { /* 文件可能正在被占用，静默跳过 */ }
+                    }
+
+                    // 2. 递归删除所有子文件夹
+                    foreach (DirectoryInfo dir in di.EnumerateDirectories())
+                    {
+                        try { dir.Delete(true); }
+                        catch (IOException) { /* 文件夹内有文件被占用，静默跳过 */ }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    // 记录日志或静默处理
-                    Console.WriteLine($"清空文件夹 {folderName} 失败: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"清理 {folderName} 失败: {ex.Message}");
                 }
             }
         }
@@ -252,8 +254,7 @@ namespace mylabel
             // D. 画标注点
             // 获取图片的实际 DPI（若图片没设置，默认 96）
             // PS 标准换算：1 point = (DPI / 72) pixels
-            bool onlyShowIndex = (_currentDownAction == DoTextReviewMouseDown);
-            float dpiScale = image.HorizontalResolution / 72f;
+            float DpiScale = image.HorizontalResolution / 96f;
 
             // 2. 只有都不为空时才绘制
             if (CurrentInfo != null && image != null)
@@ -264,7 +265,7 @@ namespace mylabel
                     image.Size,
                     scale,
                     CurrentSelectedLabel, // 替换 currentSelected 或直接传入
-                    dpiScale,
+                    DpiScale,
                     (groupName) => GetColorForGroup(groupName),
                     CurrentViewConfig.showIndex, // 直接从元组取值
                     CurrentViewConfig.showText,
@@ -1102,10 +1103,20 @@ namespace mylabel
                     using var ms = new MemoryStream(bytes);
                     image = Image.FromStream(ms);
                 }
+                if (_currentProject.IsArchiveMode && !string.IsNullOrEmpty(_currentProject.ZipPath))//压缩包预加载
+                {
+                    // 准备数据：获取所有文件名和当前位置
+                    var allNames = PicNameBindingSource.Cast<ImageInfo>()
+                                                       .Select(x => x.ImageName)
+                                                       .ToList();
+                    int index = PicNameBindingSource.Position;
+
+                    // 丢给后台跑，不关心结果
+                    _ = ArchiveHelper.PrefetchNeighbors(_currentProject.ZipPath, allNames, index);
+                }
             }
             catch { image = null; }
         }
-
         private void ApplyFilter()// 过滤方法
         {
             // 以后只需这一行，语义更清晰
@@ -1618,7 +1629,7 @@ namespace mylabel
 
             // 4. 根据需求执行初始保存
             // 注意：只有在非预览模式（txtName 不为空）且要求立即保存时才执行
-            if (saveImmediately && !string.IsNullOrEmpty(_currentProject.TxtName))
+            if (saveImmediately)
             {
                 DoSave(_currentProject.TxtPath);
                 ShowMsg($"项目创建成功！识别到 {imageDatabase.Count} 张图片。");
@@ -1645,71 +1656,40 @@ namespace mylabel
             if (hasData) { PicNameBindingSource.Position = 0; RefreshImageDisplay(); fittoview(); }
             else PicView.Invalidate();
         }
-        #region 新建或预览
-        private IEnumerable<string> GetFolderImages(string folderPath)// 文件夹模式通用提取逻辑
+        #region 新建或预览或打开txt
+        private void NewTranslation_Click(object sender, EventArgs e)// 按钮：新建文件夹翻译 (保存)
         {
-            return Directory.EnumerateFiles(folderPath)
-                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
-                .Select(Path.GetFileName)
-                .Cast<string>();
+            using var fbd = new FolderBrowserDialog { Description = "选择要新建翻译的文件夹" };
+            if (fbd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { fbd.SelectedPath }, true);
         }
-        // 按钮：新建翻译 (保存)
-        private void NewTranslation_Click(object sender, EventArgs e)
-        {
-            using var sfd = new SaveFileDialog { Filter = "文本文件|*.txt" };
-            if (sfd.ShowDialog() != DialogResult.OK) return;
-
-            string folder = Path.GetDirectoryName(sfd.FileName)!;
-            string fileName = Path.GetFileName(sfd.FileName);
-
-            var imageNames = GetFolderImages(folder);
-
-            // 参数：图片列表, 基准目录, 翻译文件名, 压缩包名(null), 是否立即保存(true)
-            SetupProject(imageNames, folder, fileName, null, true);
-        }
-
-        // 按钮：预览文件夹图片 (不保存)
-        private void OpenFolderPicture_Click(object sender, EventArgs e)
-        {
-            using var fbd = new FolderBrowserDialog { Description = "选择要预览图片的文件夹" };
-            if (fbd.ShowDialog() != DialogResult.OK) return;
-
-            string folder = fbd.SelectedPath;
-            var imageNames = GetFolderImages(folder);
-
-            // 参数：图片列表, 基准目录, 翻译文件名(null), 压缩包名(null), 是否立即保存(false)
-            SetupProject(imageNames, folder, null, null, false);
-        }
-        private (IEnumerable<string> names, string zipName) GetZipImages(string zipPath)// 压缩包模式通用提取逻辑
-        {
-            // 提取包内图片列表
-            var names = ArchiveHelper.GetImageEntries(zipPath);
-            // 获取压缩包文件名（例如 "data.zip"）
-            string zipName = Path.GetFileName(zipPath);
-            return (names, zipName);
-        }
-        // 按钮：新建压缩包翻译 (保存)
-        private void NewZipTranslation_Click(object sender, EventArgs e)
+        private void NewZipTranslation_Click(object sender, EventArgs e)// 按钮：新建压缩包翻译 (保存)
         {
             using var ofd = new OpenFileDialog { Filter = "压缩文件|*.zip;*.7z;*.rar", Title = "选择压缩包创建翻译项目" };
-            if (ofd.ShowDialog() != DialogResult.OK) return;
-
-            // 1. 获取基础文件夹路径
-            string folder = Path.GetDirectoryName(ofd.FileName)!;
-
-            // 2. 提取压缩包内图片和文件名
-            var data = GetZipImages(ofd.FileName);
-
-            // 3. 构造默认的翻译文件名 (例如 "data_翻译.txt")
-            string defaultTxtName = Path.GetFileNameWithoutExtension(data.zipName) + "_翻译.txt";
-
-            // 4. 调用 SetupProject
-            // 参数：图片列表, 基准目录, 翻译文件名, 压缩包名, 是否立即保存(true)
-            SetupProject(data.names, folder, defaultTxtName, data.zipName, true);
+            if (ofd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { ofd.FileName }, true); // 新建模式
         }
-
-        // 按钮：预览图片或压缩包 (不保存)
-        private void OpenPictureorZip_Click(object sender, EventArgs e)
+        private void OpenFolderPicture_Click(object sender, EventArgs e)// 按钮：预览文件夹图片 (不保存)
+        {
+            using var fbd = new FolderBrowserDialog { Description = "选择要预览图片的文件夹" };
+            if (fbd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { fbd.SelectedPath }, false); // 预览模式
+        }
+        private void LabelMinusForm_DragEnter(object sender, DragEventArgs e)
+        {
+            // 检查拖进来的是不是文件
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effect = DragDropEffects.Copy; // 鼠标指针变成“复制”图标
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+        private void LabelMinusForm_DragDrop(object sender, DragEventArgs e)
+        {
+            string[]? paths = e.Data.GetData(DataFormats.FileDrop) as string[];// 提取数据
+            OpenResourceByPath(paths, false);
+        }
+        private void OpenPictureorZip_Click(object sender, EventArgs e)// 按钮：预览图片或压缩包 (不保存)
         {
             using var ofd = new OpenFileDialog
             {
@@ -1717,45 +1697,28 @@ namespace mylabel
                 Title = "选择图片（支持多选）或压缩包（单个）",
                 Multiselect = true // 允许用户按住 Shift 或 Ctrl 多选
             };
-
-            if (ofd.ShowDialog() != DialogResult.OK) return;
-
-            // 如果用户选了多个文件，检查第一个文件的类型
-            string firstFile = ofd.FileName;
-            string folder = Path.GetDirectoryName(firstFile)!;
-            string ext = Path.GetExtension(firstFile).ToLower();
-
-            if (new[] { ".zip", ".7z", ".rar" }.Contains(ext))
-            {
-                // 压缩包预览模式
-                var data = GetZipImages(firstFile);
-                SetupProject(data.names, folder, null, data.zipName, false);
-            }
-            else
-            {
-                // 图片多选预览模式
-                var selectedNames = ofd.FileNames
-                        .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower())) // 只保留图片后缀的文件
-                        .Select(Path.GetFileName)
-                        .Cast<string>()
-                        .ToList(); // 立即求值，方便后续判断
-                SetupProject(selectedNames, folder, null, null, false);
-            }
+            if (ofd.ShowDialog() == DialogResult.OK)OpenResourceByPath(ofd.FileNames, false);
         }
-        #endregion
         private void OpenTranslation_Click(object sender, EventArgs e)
         {
             using var ofd = new OpenFileDialog { Filter = "文本文件|*.txt" };
-            if (ofd.ShowDialog() != DialogResult.OK) return;
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                LoadProjectFromTxt(ofd.FileName);
+            }
+        }
+        #endregion
 
+        private void LoadProjectFromTxt(string txtFilePath)
+        {
             try
             {
                 // 1. 解析文本，获取数据库和 sourceName (比如 "data.zip")
-                var db = mylabel.Modules.Modules.ParseTextToLabels(File.ReadAllText(ofd.FileName), out string? ZipName);
+                var db = mylabel.Modules.Modules.ParseTextToLabels(File.ReadAllText(txtFilePath), out string? ZipName);
 
                 // 2. 路径拆分：获取文件夹基准和 TXT 文件名
-                string folder = Path.GetDirectoryName(ofd.FileName) ?? string.Empty;
-                string txtName = Path.GetFileName(ofd.FileName);
+                string folder = Path.GetDirectoryName(txtFilePath) ?? string.Empty;
+                string txtName = Path.GetFileName(txtFilePath);
 
                 // 3. 素材有效性验证 (逻辑与之前一致)
                 string fullSourcePath = !string.IsNullOrEmpty(ZipName) ? Path.Combine(folder, ZipName) : "";
@@ -1774,6 +1737,55 @@ namespace mylabel
                 ShowMsg($"成功加载翻译：{txtName}");
             }
             catch (Exception ex) { ShowMsg("解析失败: " + ex.Message, true); }
+        }
+        private void OpenResourceByPath(string[] paths,bool isCreateMode)// 核心逻辑提取：根据输入的路径自动识别并加载项目
+        {
+            if (paths == null || paths.Length == 0) return;
+
+            string firstPath = paths[0];
+            string ext = Path.GetExtension(firstPath).ToLower();
+            string folder = Path.GetDirectoryName(firstPath) ?? string.Empty;
+
+            // 1. 处理翻译文档 (.txt)
+            if (ext == ".txt")
+            {
+                LoadProjectFromTxt(firstPath);
+                return;
+            }
+
+            // 2. 处理压缩包
+            if (File.Exists(firstPath) && archiveExts.Contains(ext))
+            {
+                var data = GetZipImages(firstPath);
+                // 如果是新建，生成默认文件名；否则为 null (预览模式)
+                string? txtName = isCreateMode ?
+                    Path.GetFileNameWithoutExtension(data.zipName) + "_翻译.txt" : null;
+
+                SetupProject(data.names, folder, txtName, data.zipName, isCreateMode);
+                return;
+            }
+
+            // 3. 处理文件夹
+            if (Directory.Exists(firstPath))
+            {
+                var imageNames = GetFolderImages(firstPath);
+                SetupProject(imageNames, folder, null, null, isCreateMode);
+            }
+        }
+        private IEnumerable<string> GetFolderImages(string folderPath)// 文件夹模式通用提取逻辑
+        {
+            return Directory.EnumerateFiles(folderPath)
+                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                .Select(Path.GetFileName)
+                .Cast<string>();
+        }
+        private (IEnumerable<string> names, string zipName) GetZipImages(string zipPath)// 压缩包模式通用提取逻辑
+        {
+            // 提取包内图片列表
+            var names = ArchiveHelper.GetImageEntries(zipPath);
+            // 获取压缩包文件名（例如 "data.zip"）
+            string zipName = Path.GetFileName(zipPath);
+            return (names, zipName);
         }
         #region 保存逻辑
         private void SaveTranslation_Click(object sender, EventArgs e) => DoSave(_currentProject.TxtPath);
@@ -1883,7 +1895,7 @@ namespace mylabel
         private void Changeimageinfo_Click(object sender, EventArgs e)
         {
             // 1. 检查前提条件
-            if (imageDatabase == null || imageDatabase.Count == 0)
+            if (string.IsNullOrWhiteSpace(_currentProject.BaseFolderPath))
             {
                 ShowMsg("请先选择图片文件夹或压缩包！", true);
                 return;
@@ -1938,7 +1950,7 @@ namespace mylabel
 
             // 5. 刷新 UI 和 保存文件
             // 这里的 RefreshImageDatabaseUI 需要能接受 Dictionary 或 Values
-            RefreshImageDatabaseUI(imageDatabase.Values);
+            RefreshImageDatabaseUI(imageDatabase.Values.OrderBy(x => x.ImageName).ToList());
 
             // 调用你之前的保存逻辑(先不保存)
             //string content = LabelsToText(imageDatabase, ExportMode.Current);
@@ -1959,7 +1971,7 @@ namespace mylabel
                 Panel topPanel = new() { Dock = DockStyle.Top, Height = 60, Padding = new Padding(10) };
                 Label lblSource = new()
                 {
-                    Text = $"路径：{sourceDetail}",
+                    Text = $"路径：{sourceDetail}\n未勾选图片的标记将会删除",
                     Dock = DockStyle.Fill,
                     ForeColor = Color.Black,
                     Font = new Font(this.Font, FontStyle.Bold)
@@ -2046,12 +2058,13 @@ namespace mylabel
         #endregion
 
 
+        
 
 
 
     }
     public class ProjectContext
-    {       
+    {
         public string BaseFolderPath { get; set; } = string.Empty;// 显式存储文件夹路径        
         public string TxtName { get; set; } = null;// 翻译文件路径（预览模式下为空）       
         public string? ZipName { get; set; } = null;// 压缩包文件名（文件夹模式下为空）

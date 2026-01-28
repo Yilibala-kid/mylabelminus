@@ -188,6 +188,7 @@
             // Menu
             // 
             Menu.BackColor = Color.White;
+            Menu.ImageScalingSize = new Size(24, 24);
             Menu.Items.AddRange(new ToolStripItem[] { FileMenu, ModifyMenu, ExportText, 显示ToolStripMenuItem, 高级ToolStripMenuItem, HelpMenu });
             Menu.Location = new Point(0, 0);
             Menu.Name = "Menu";
@@ -541,8 +542,9 @@
             dataGridViewCellStyle6.WrapMode = DataGridViewTriState.True;
             LabelView.RowHeadersDefaultCellStyle = dataGridViewCellStyle6;
             LabelView.RowHeadersVisible = false;
+            LabelView.RowHeadersWidth = 62;
             LabelView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            LabelView.Size = new Size(364, 239);
+            LabelView.Size = new Size(364, 238);
             LabelView.TabIndex = 2;
             // 
             // LabelIndex
@@ -565,6 +567,7 @@
             dataGridViewCellStyle3.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             LabelText.DefaultCellStyle = dataGridViewCellStyle3;
             LabelText.HeaderText = "文本";
+            LabelText.MinimumWidth = 8;
             LabelText.Name = "LabelText";
             // 
             // LabelGroup
@@ -574,6 +577,7 @@
             dataGridViewCellStyle4.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             LabelGroup.DefaultCellStyle = dataGridViewCellStyle4;
             LabelGroup.HeaderText = "组别";
+            LabelGroup.MinimumWidth = 8;
             LabelGroup.Name = "LabelGroup";
             LabelGroup.SortMode = DataGridViewColumnSortMode.NotSortable;
             LabelGroup.Width = 60;
@@ -582,61 +586,78 @@
             // 
             indexDataGridViewTextBoxColumn.DataPropertyName = "Index";
             indexDataGridViewTextBoxColumn.HeaderText = "序号";
+            indexDataGridViewTextBoxColumn.MinimumWidth = 8;
             indexDataGridViewTextBoxColumn.Name = "indexDataGridViewTextBoxColumn";
             indexDataGridViewTextBoxColumn.Visible = false;
+            indexDataGridViewTextBoxColumn.Width = 150;
             // 
             // textDataGridViewTextBoxColumn
             // 
             textDataGridViewTextBoxColumn.DataPropertyName = "Text";
             textDataGridViewTextBoxColumn.HeaderText = "文本内容";
+            textDataGridViewTextBoxColumn.MinimumWidth = 8;
             textDataGridViewTextBoxColumn.Name = "textDataGridViewTextBoxColumn";
             textDataGridViewTextBoxColumn.Visible = false;
+            textDataGridViewTextBoxColumn.Width = 150;
             // 
             // groupDataGridViewTextBoxColumn
             // 
             groupDataGridViewTextBoxColumn.DataPropertyName = "Group";
             groupDataGridViewTextBoxColumn.HeaderText = "分组";
+            groupDataGridViewTextBoxColumn.MinimumWidth = 8;
             groupDataGridViewTextBoxColumn.Name = "groupDataGridViewTextBoxColumn";
             groupDataGridViewTextBoxColumn.Visible = false;
+            groupDataGridViewTextBoxColumn.Width = 150;
             // 
             // positionDataGridViewTextBoxColumn
             // 
             positionDataGridViewTextBoxColumn.DataPropertyName = "Position";
             positionDataGridViewTextBoxColumn.HeaderText = "位置";
+            positionDataGridViewTextBoxColumn.MinimumWidth = 8;
             positionDataGridViewTextBoxColumn.Name = "positionDataGridViewTextBoxColumn";
             positionDataGridViewTextBoxColumn.Visible = false;
+            positionDataGridViewTextBoxColumn.Width = 150;
             // 
             // fontSizeDataGridViewTextBoxColumn
             // 
             fontSizeDataGridViewTextBoxColumn.DataPropertyName = "FontSize";
             fontSizeDataGridViewTextBoxColumn.HeaderText = "字号";
+            fontSizeDataGridViewTextBoxColumn.MinimumWidth = 8;
             fontSizeDataGridViewTextBoxColumn.Name = "fontSizeDataGridViewTextBoxColumn";
             fontSizeDataGridViewTextBoxColumn.Visible = false;
+            fontSizeDataGridViewTextBoxColumn.Width = 150;
             // 
             // fontFamilyDataGridViewTextBoxColumn
             // 
             fontFamilyDataGridViewTextBoxColumn.DataPropertyName = "FontFamily";
             fontFamilyDataGridViewTextBoxColumn.HeaderText = "字体";
+            fontFamilyDataGridViewTextBoxColumn.MinimumWidth = 8;
             fontFamilyDataGridViewTextBoxColumn.Name = "fontFamilyDataGridViewTextBoxColumn";
             fontFamilyDataGridViewTextBoxColumn.Visible = false;
+            fontFamilyDataGridViewTextBoxColumn.Width = 150;
             // 
             // remarkDataGridViewTextBoxColumn
             // 
             remarkDataGridViewTextBoxColumn.DataPropertyName = "Remark";
             remarkDataGridViewTextBoxColumn.HeaderText = "备注";
+            remarkDataGridViewTextBoxColumn.MinimumWidth = 8;
             remarkDataGridViewTextBoxColumn.Name = "remarkDataGridViewTextBoxColumn";
             remarkDataGridViewTextBoxColumn.Visible = false;
+            remarkDataGridViewTextBoxColumn.Width = 150;
             // 
             // originalTextDataGridViewTextBoxColumn
             // 
             originalTextDataGridViewTextBoxColumn.DataPropertyName = "OriginalText";
             originalTextDataGridViewTextBoxColumn.HeaderText = "OriginalText";
+            originalTextDataGridViewTextBoxColumn.MinimumWidth = 8;
             originalTextDataGridViewTextBoxColumn.Name = "originalTextDataGridViewTextBoxColumn";
             originalTextDataGridViewTextBoxColumn.ReadOnly = true;
             originalTextDataGridViewTextBoxColumn.Visible = false;
+            originalTextDataGridViewTextBoxColumn.Width = 150;
             // 
             // LabelViewMenuStrip
             // 
+            LabelViewMenuStrip.ImageScalingSize = new Size(24, 24);
             LabelViewMenuStrip.Items.AddRange(new ToolStripItem[] { deleteLabelToolStripMenuItem });
             LabelViewMenuStrip.Name = "LabelViewMenuStrip";
             LabelViewMenuStrip.Size = new Size(145, 26);
@@ -867,7 +888,7 @@
             // 
             splitContainer2.Panel2.Controls.Add(Parampanel);
             splitContainer2.Size = new Size(370, 694);
-            splitContainer2.SplitterDistance = 250;
+            splitContainer2.SplitterDistance = 249;
             splitContainer2.TabIndex = 6;
             // 
             // LabelViewpanel
@@ -878,7 +899,7 @@
             LabelViewpanel.Location = new Point(0, 0);
             LabelViewpanel.Name = "LabelViewpanel";
             LabelViewpanel.Padding = new Padding(3);
-            LabelViewpanel.Size = new Size(370, 245);
+            LabelViewpanel.Size = new Size(370, 244);
             LabelViewpanel.TabIndex = 5;
             // 
             // Parampanel
@@ -892,7 +913,7 @@
             Parampanel.Location = new Point(0, 0);
             Parampanel.Name = "Parampanel";
             Parampanel.Padding = new Padding(0, 40, 0, 10);
-            Parampanel.Size = new Size(370, 440);
+            Parampanel.Size = new Size(370, 441);
             Parampanel.TabIndex = 4;
             // 
             // GroupPanel
@@ -932,7 +953,7 @@
             Textboxpanel.Location = new Point(0, 40);
             Textboxpanel.Name = "Textboxpanel";
             Textboxpanel.Padding = new Padding(3);
-            Textboxpanel.Size = new Size(209, 390);
+            Textboxpanel.Size = new Size(209, 391);
             Textboxpanel.TabIndex = 9;
             // 
             // LabelTextBox
@@ -946,7 +967,7 @@
             LabelTextBox.Location = new Point(3, 3);
             LabelTextBox.Multiline = true;
             LabelTextBox.Name = "LabelTextBox";
-            LabelTextBox.Size = new Size(203, 384);
+            LabelTextBox.Size = new Size(203, 385);
             LabelTextBox.TabIndex = 3;
             LabelTextBox.Enter += TextBox_FocusChanged;
             LabelTextBox.Leave += TextBox_FocusChanged;
@@ -967,7 +988,7 @@
             Parampanel1.Location = new Point(209, 40);
             Parampanel1.Name = "Parampanel1";
             Parampanel1.Padding = new Padding(3);
-            Parampanel1.Size = new Size(161, 390);
+            Parampanel1.Size = new Size(161, 391);
             Parampanel1.TabIndex = 8;
             Parampanel1.Visible = false;
             // 
@@ -1070,7 +1091,7 @@
             RemarktextBox.DataBindings.Add(new Binding("Text", imageLabelBindingSource, "Remark", true, DataSourceUpdateMode.OnPropertyChanged));
             RemarktextBox.Dock = DockStyle.Bottom;
             RemarktextBox.ForeColor = Color.Gray;
-            RemarktextBox.Location = new Point(3, 303);
+            RemarktextBox.Location = new Point(3, 304);
             RemarktextBox.Multiline = true;
             RemarktextBox.Name = "RemarktextBox";
             RemarktextBox.Size = new Size(155, 84);
@@ -1082,7 +1103,7 @@
             // 
             Remarklabel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             Remarklabel.AutoSize = true;
-            Remarklabel.Location = new Point(6, 283);
+            Remarklabel.Location = new Point(6, 284);
             Remarklabel.Name = "Remarklabel";
             Remarklabel.Size = new Size(32, 17);
             Remarklabel.TabIndex = 6;
@@ -1224,6 +1245,7 @@
             // 
             // LabelMinusForm
             // 
+            AllowDrop = true;
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(984, 761);
@@ -1238,6 +1260,8 @@
             FormClosing += LabelMinusForm_FormClosing;
             FormClosed += LabelMinusForm_FormClosed;
             Load += LabelMinus_Load;
+            DragDrop += LabelMinusForm_DragDrop;
+            DragEnter += LabelMinusForm_DragEnter;
             ((System.ComponentModel.ISupportInitialize)PicView).EndInit();
             Menu.ResumeLayout(false);
             Menu.PerformLayout();

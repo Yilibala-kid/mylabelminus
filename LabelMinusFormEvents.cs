@@ -1,9 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using System.Windows.Forms;
+﻿using System.Diagnostics;
 
 namespace mylabel
 {
@@ -150,7 +145,7 @@ namespace mylabel
         {
             fittoview();
         }
-        private void fittoview() 
+        private void fittoview()
         {
             if (image == null) return;
 
@@ -279,7 +274,7 @@ namespace mylabel
         }
         private void PicOnly_Click(object sender, EventArgs e)
         {
-            if(PicOnly.Checked)
+            if (PicOnly.Checked)
             {
                 splitContainer1.Panel2Collapsed = true;  // 折叠 Panel2
                 splitContainer1.Panel1Collapsed = false; // 确保 Panel1 是开启的
@@ -331,7 +326,7 @@ namespace mylabel
             }
             catch (Exception ex)
             {
-                ShowMsg($"无法打开网页",true);
+                ShowMsg($"无法打开网页", true);
             }
         }
         private void Notations_Click(object sender, EventArgs e)

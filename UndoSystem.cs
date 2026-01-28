@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Reflection;
-using System.Text;
-using System.Windows.Input;
+﻿using System.Reflection;
 
 namespace LabelMinus
 {

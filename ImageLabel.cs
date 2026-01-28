@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 
 public class ViewModelBase : INotifyPropertyChanged
@@ -24,15 +23,16 @@ public class ImageInfo : ViewModelBase
 
     public string ImageName { get => _imageName; set => SetProperty(ref _imageName, value); }
     [Browsable(false)] public List<ImageLabel> ActiveLabels => Labels.Where(l => !l.IsDeleted).ToList();
-    
+
 
     public ImageInfo()
+    {
+        Labels.ListChanged += (s, e) =>
         {
-            Labels.ListChanged += (s, e) => {
-                if (!_isRefreshing && e.ListChangedType is ListChangedType.ItemAdded or ListChangedType.ItemDeleted or ListChangedType.ItemMoved)
-                    RefreshIndices();
-            };
-        }
+            if (!_isRefreshing && e.ListChangedType is ListChangedType.ItemAdded or ListChangedType.ItemDeleted or ListChangedType.ItemMoved)
+                RefreshIndices();
+        };
+    }
 
     public void RefreshIndices()
     {
@@ -72,7 +72,7 @@ public class ImageLabel : ViewModelBase
     private int _index;
     private string _text = "";
     private string _originalText = ""; // 存储原文
-    private double _fontSize = 16.0;
+    private double _fontSize = 20.0;
     private string _fontFamily = "微软雅黑";
     private string _group = "框内";
     private string _remark = "这是备注";
@@ -89,8 +89,9 @@ public class ImageLabel : ViewModelBase
     }
     [DisplayName("序号")] public int Index { get => _index; set => SetProperty(ref _index, value); }
 
-    
-    [DisplayName("文本内容")] public string Text
+
+    [DisplayName("文本内容")]
+    public string Text
     {
         get => _text;
         set
@@ -101,7 +102,7 @@ public class ImageLabel : ViewModelBase
             }
         }
     }
-    [DisplayName("分组")]public string Group { get => _group; set => SetProperty(ref _group, value); }
+    [DisplayName("分组")] public string Group { get => _group; set => SetProperty(ref _group, value); }
     [DisplayName("位置")] public BoundingBox Position { get => _position; set => SetProperty(ref _position, value); }
     private void UpdatePos(Func<BoundingBox, BoundingBox> updater, [CallerMemberName] string prop = "")
     {

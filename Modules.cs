@@ -1,14 +1,7 @@
-﻿using Newtonsoft.Json;
-using SharpCompress.Archives;
-using SkiaSharp;
-using System;
-using System.Collections.Concurrent;
-using System.Drawing.Drawing2D;
+﻿using SharpCompress.Archives;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
 
 
 namespace mylabel.Modules
@@ -17,9 +10,9 @@ namespace mylabel.Modules
     {
 
         #region 核心绘图函数：绘制序号及竖向文字
-        public static void DrawAnnotations(Graphics g, ImageInfo currentImage, Size imgSize,float scale, ImageLabel selectedLabel, 
+        public static void DrawAnnotations(Graphics g, ImageInfo currentImage, Size imgSize, float scale, ImageLabel selectedLabel,
                                                      float imageDpi, Func<string, Color> colorPicker,
-                                                     bool showIndex, bool showText,bool showGroup)
+                                                     bool showIndex, bool showText, bool showGroup)
         {
             // 如果当前图片对象为空，直接退出
             if (currentImage == null || currentImage.Labels == null) return;
@@ -41,18 +34,18 @@ namespace mylabel.Modules
                 bool isSelected = (label == selectedLabel);
                 Color groupColor = colorPicker(label.Group);
                 Color finalColor = isSelected ? Color.Purple : groupColor;
-
+                float fontsize = 30 * imageDpi;
                 using var themeBrush = new SolidBrush(finalColor);
                 // --- A. 绘制组别 ---
                 if (showGroup)
                 {
-                    using var groupFont = new Font("Arial", 20 * imageDpi, FontStyle.Bold, GraphicsUnit.Pixel);
-                    g.DrawString(label.Group, groupFont, themeBrush, x, y - (20 * imageDpi), centerFormat);
+                    using var groupFont = new Font("Arial", fontsize, FontStyle.Bold, GraphicsUnit.Pixel);
+                    g.DrawString(label.Group, groupFont, themeBrush, x, y - fontsize, centerFormat);
                 }
                 // --- B. 绘制序号 ---
                 if (showIndex)
                 {
-                    using var indexFont = new Font("Arial", 20 * imageDpi, FontStyle.Bold, GraphicsUnit.Pixel);
+                    using var indexFont = new Font("Arial", fontsize, FontStyle.Bold, GraphicsUnit.Pixel);
                     g.DrawString(label.Index.ToString(), indexFont, themeBrush, x, y, centerFormat);
                 }
                 // --- C. 绘制内容 ---
@@ -62,7 +55,7 @@ namespace mylabel.Modules
                     using var textFont = GetSafeFont(label.FontFamily, fontSize);
 
                     // 如果没显示序号，文字就从 Y 坐标开始画；如果显示了序号，向下偏移
-                    float textY = showIndex ? y + (20 * imageDpi) : y;
+                    float textY = showIndex ? y + fontsize: y;
                     g.DrawString(label.Text, textFont, themeBrush, x, textY, vFormat);
                 }
             }
@@ -92,7 +85,7 @@ namespace mylabel.Modules
 
         #region 文本解析与导出函数
         public enum ExportMode { Original, Current, Diff }
-        public static Dictionary<string, ImageInfo> ParseTextToLabels(string content,out string sourceName)//文本解析
+        public static Dictionary<string, ImageInfo> ParseTextToLabels(string content, out string sourceName)//文本解析
         {
             sourceName = null;
             var database = new Dictionary<string, ImageInfo>();
@@ -270,7 +263,8 @@ namespace mylabel.Modules
                 // 如果不是输入类控件，则绑定点击事件
                 if (!(ctrl is TextBox || ctrl is ComboBox || ctrl is DataGridView || ctrl is Button))
                 {
-                    ctrl.MouseDown += (s, e) => {
+                    ctrl.MouseDown += (s, e) =>
+                    {
                         if (targetFocusControl.CanFocus) targetFocusControl.Focus();
                     };
                 }
@@ -367,11 +361,11 @@ namespace mylabel.Modules
                         sp.BackColor = PanelColor;
                         break;
                     case Panel p:
-                        if (p.Name == "LabelViewpanel"|| p.Name == "Textboxpanel") 
+                        if (p.Name == "LabelViewpanel" || p.Name == "Textboxpanel")
                         {
                             p.BackColor = Color.RoyalBlue;
                         }
-                        else if(p.Name == "PicView")
+                        else if (p.Name == "PicView")
                         {
                             p.BackColor = PicViewBg;
                         }
@@ -381,7 +375,7 @@ namespace mylabel.Modules
                     case Button btn:
                         btn.FlatStyle = FlatStyle.Flat;
                         btn.BackColor = IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
-                        btn.FlatAppearance.BorderColor = IsDarkMode ?  BorderColor:Color.Tan; // 使用你定义的 BorderColor
+                        btn.FlatAppearance.BorderColor = IsDarkMode ? BorderColor : Color.Tan; // 使用你定义的 BorderColor
                         btn.FlatAppearance.BorderSize = 2;
                         break;
                     case DataGridView dgv:
@@ -439,7 +433,7 @@ namespace mylabel.Modules
         {
             dgv.BackgroundColor = BackColor;
             dgv.GridColor = BorderColor;
-            dgv.DefaultCellStyle.BackColor = IsDarkMode ? Dark_Pnl:Color.White;
+            dgv.DefaultCellStyle.BackColor = IsDarkMode ? Dark_Pnl : Color.White;
             dgv.DefaultCellStyle.ForeColor = TextColor;
             dgv.DefaultCellStyle.SelectionBackColor = Color.RoyalBlue;
             dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
@@ -467,7 +461,7 @@ namespace mylabel.Modules
     public class ArchiveHelper
     {
         // 定义支持的图片后缀
-        private static readonly HashSet<string> imageExtensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp" ];
+        private static readonly HashSet<string> imageExtensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"];
 
         /// <summary>
         /// 获取压缩包内所有图片的路径列表
@@ -537,29 +531,58 @@ namespace mylabel.Modules
 
             return null;
         }
-        public static void ClearCache()// 当切换项目或内存占用过高时手动清空缓存
+        // 异步预加载相邻图片
+        public static async Task PrefetchNeighbors(string archivePath, List<string> allFileNames, int currentIndex)
         {
-            try
+            // 定义预加载范围，比如前后各 1 张
+            int[] offsets = { 1, -1, 2, -2 };
+
+            await Task.Run(() =>
             {
-                if (Directory.Exists(TempFolderPath))
+                string archiveName = Path.GetFileNameWithoutExtension(archivePath);
+                string targetDir = Path.Combine(TempFolderPath, archiveName);
+
+                // 找出真正需要解压的文件名（过滤掉已经在磁盘上的）
+                var pendingFiles = offsets
+                    .Select(o => currentIndex + o)
+                    .Where(i => i >= 0 && i < allFileNames.Count)
+                    .Select(i => allFileNames[i])
+                    .Where(name => !File.Exists(Path.Combine(targetDir, name)))
+                    .ToList();
+
+                if (pendingFiles.Count == 0) return;
+
+                try
                 {
-                    // 方式 A：直接删除整个文件夹再重建（最彻底）
-                    Directory.Delete(TempFolderPath, true);
-                    Directory.CreateDirectory(TempFolderPath);
+                    // --- 关键优化：只打开一次压缩包 ---
+                    using var archive = ArchiveFactory.Open(archivePath);
+                    foreach (var fileName in pendingFiles)
+                    {
+                        var entry = archive.Entries.FirstOrDefault(e =>
+                            e.Key.Equals(fileName, StringComparison.OrdinalIgnoreCase) ||
+                            e.Key.EndsWith("/" + fileName, StringComparison.OrdinalIgnoreCase));
 
-                    /* // 方式 B：如果你只想删除内容而不删除文件夹本身，可以用这个逻辑：
-                    foreach (string file in Directory.GetFiles(TempFolderPath)) File.Delete(file);
-                    foreach (string dir in Directory.GetDirectories(TempFolderPath)) Directory.Delete(dir, true);
-                    */
+                        if (entry != null && !entry.IsDirectory)
+                        {
+                            string targetFilePath = Path.Combine(targetDir, fileName);
+                            Directory.CreateDirectory(targetDir);
 
-                    System.Diagnostics.Debug.WriteLine("ArchiveTemp 缓存已清空");
+                            // 使用临时扩展名防止其他线程误读未写完的文件
+                            string tempFile = targetFilePath + ".tmp";
+                            using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write))
+                            {
+                                entry.WriteTo(fs);
+                            }
+                            if (File.Exists(targetFilePath)) File.Delete(targetFilePath);
+                            File.Move(tempFile, targetFilePath);
+                        }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                // 捕获可能的文件占用异常（例如图片正在被 UI 显示）
-                System.Diagnostics.Debug.WriteLine($"清空缓存失败: {ex.Message}");
-            }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"预加载批量解压失败: {ex.Message}");
+                }
+            });
         }
     }
 }
