@@ -2047,8 +2047,6 @@ namespace mylabel
 
 
         #endregion
-
-
     }
     public class ProjectContext
     {

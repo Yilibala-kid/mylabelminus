@@ -143,6 +143,7 @@
             TextReviewMode = new Button();
             LabelMode = new Button();
             MessageTimer = new System.Windows.Forms.Timer(components);
+            OpenTimer = new System.Windows.Forms.Timer(components);
             ((System.ComponentModel.ISupportInitialize)PicView).BeginInit();
             Menu.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)LabelView).BeginInit();
@@ -1244,6 +1245,11 @@
             MessageTimer.Interval = 3000;
             MessageTimer.Tick += MessageTimer_Tick;
             // 
+            // OpenTimer
+            // 
+            OpenTimer.Interval = 1000;
+            OpenTimer.Tick += OpenTimer_Tick;
+            // 
             // LabelMinusForm
             // 
             AllowDrop = true;
@@ -1406,5 +1412,6 @@
         private DataGridViewTextBoxColumn fontFamilyDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn remarkDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn originalTextDataGridViewTextBoxColumn;
+        private System.Windows.Forms.Timer OpenTimer;
     }
 }

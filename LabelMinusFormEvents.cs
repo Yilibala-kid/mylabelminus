@@ -594,12 +594,11 @@ namespace mylabel
         }
 
         private List<string> pathBuffer = new List<string>();
-        private System.Windows.Forms.Timer openTimer;
 
         // 在构造函数或 Load 事件中初始化计时器
-        private void openTimer_Tick(object sender, EventArgs e)
+        private void OpenTimer_Tick(object sender, EventArgs e)
         {
-            openTimer.Stop();
+            OpenTimer.Stop();
             if (pathBuffer.Count > 0)
             {
                 // 一次性打开所有收集到的路径
@@ -614,11 +613,11 @@ namespace mylabel
             if (string.IsNullOrEmpty(path)) return;
 
             // 如果这是第一个路径，启动计时器
-            if (pathBuffer.Count == 0) openTimer.Start();
+            if (pathBuffer.Count == 0) OpenTimer.Start();
 
             pathBuffer.Add(path);
-            openTimer.Stop();
-            openTimer.Start();
+            OpenTimer.Stop();
+            OpenTimer.Start();
         }
         #endregion
 

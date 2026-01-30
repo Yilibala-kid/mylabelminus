@@ -310,7 +310,6 @@ namespace mylabel.Modules
             InputIdleText = Color.Gray,            // 输入框空闲时的文本颜色
             BtnDefaultBg = Color.FromArgb(60, 60, 60),// 按钮默认背景颜色
             BtnActiveFore = Color.White           // 按钮激活时的前景颜色
-
         };
 
         private static readonly ColorTable LightColor = new ColorTable
