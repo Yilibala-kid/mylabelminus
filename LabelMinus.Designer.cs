@@ -77,7 +77,7 @@
             toolStripSeparator1 = new ToolStripSeparator();
             CompressPic = new ToolStripMenuItem();
             高级ToolStripMenuItem = new ToolStripMenuItem();
-            正在思考加什么ToolStripMenuItem = new ToolStripMenuItem();
+            EasyRightClick = new ToolStripMenuItem();
             HelpMenu = new ToolStripMenuItem();
             ToGithub = new ToolStripMenuItem();
             LabelView = new DataGridView();
@@ -188,10 +188,10 @@
             // Menu
             // 
             Menu.BackColor = Color.White;
-            Menu.ImageScalingSize = new Size(24, 24);
             Menu.Items.AddRange(new ToolStripItem[] { FileMenu, ModifyMenu, ExportText, 显示ToolStripMenuItem, 高级ToolStripMenuItem, HelpMenu });
             Menu.Location = new Point(0, 0);
             Menu.Name = "Menu";
+            Menu.RenderMode = ToolStripRenderMode.Professional;
             Menu.Size = new Size(984, 25);
             Menu.TabIndex = 1;
             Menu.Text = "menuStrip1";
@@ -473,16 +473,17 @@
             // 
             // 高级ToolStripMenuItem
             // 
-            高级ToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { 正在思考加什么ToolStripMenuItem });
+            高级ToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { EasyRightClick });
             高级ToolStripMenuItem.Name = "高级ToolStripMenuItem";
             高级ToolStripMenuItem.Size = new Size(44, 21);
             高级ToolStripMenuItem.Text = "高级";
             // 
-            // 正在思考加什么ToolStripMenuItem
+            // EasyRightClick
             // 
-            正在思考加什么ToolStripMenuItem.Name = "正在思考加什么ToolStripMenuItem";
-            正在思考加什么ToolStripMenuItem.Size = new Size(160, 22);
-            正在思考加什么ToolStripMenuItem.Text = "正在思考加什么";
+            EasyRightClick.Name = "EasyRightClick";
+            EasyRightClick.Size = new Size(196, 22);
+            EasyRightClick.Text = "添加本程序至右键菜单";
+            EasyRightClick.Click += EasyRightClick_Click;
             // 
             // HelpMenu
             // 
@@ -1389,7 +1390,7 @@
         private ToolStripMenuItem OpenFolderPicture;
         private ToolStripSeparator toolStripSeparator5;
         private SplitContainer splitContainer2;
-        private ToolStripMenuItem 正在思考加什么ToolStripMenuItem;
+        private ToolStripMenuItem EasyRightClick;
         private ToolStripSeparator toolStripSeparator6;
         private ToolStripMenuItem PicViewText;
         private ToolStripSeparator toolStripSeparator7;

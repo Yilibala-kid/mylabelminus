@@ -2,9 +2,7 @@
 using mylabel.Modules;
 using SharpCompress.Archives;
 using System.Drawing.Text;
-using System.Security.Cryptography;
 using System.Text;
-using static mylabel.Modules.Modules;
 using Button = System.Windows.Forms.Button;
 using ComboBox = System.Windows.Forms.ComboBox;
 using Label = System.Windows.Forms.Label;
@@ -16,7 +14,6 @@ namespace mylabel
         private string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".webp" };
         private string[] archiveExts = { ".zip", ".7z", ".rar" };
 
-        // 顺便检查一下你的图片后缀定义
         private UndoManager _undoManager = new();
         private Dictionary<string, ImageInfo> imageDatabase = new();
 
@@ -42,11 +39,22 @@ namespace mylabel
 
 
         #region 窗口加载关闭要做的
-        public LabelMinusForm()
+        // 无参构造函数：负责基础初始化
+        public LabelMinusForm(string? initialPath = null)
         {
-
             InitializeComponent();
+
+            // 基础 UI 绑定
             Modules.UIHelper.BindFocusTransfer(this, PicView);
+
+            // 检查右键菜单状态（确保 EasyRightClick 此时不为 null）
+            UpdateContextMenuButtonState();
+
+            if (!string.IsNullOrEmpty(initialPath))
+            {
+                // 第一个路径也放进缓冲区，利用计时器统一打开
+                EnqueuePaths(initialPath);
+            }
         }
         private void LabelMinus_Load(object sender, EventArgs e)
         {
@@ -59,6 +67,7 @@ namespace mylabel
             ThemeManager.ApplyTheme(this);
             SetMode("LabelMode");
             EnableDoubleBuffer(LabelView);
+            UpdateContextMenuButtonState();
         }
         private void LabelMinusForm_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -411,21 +420,15 @@ namespace mylabel
                 { LabelMode, activeMode == "LabelMode" || activeMode == "Default" }
             };
 
-            // 获取当前主题色（只获取一次）
-            bool isDark = Modules.ThemeManager.IsDarkMode;
-            Color activeBg = Modules.ThemeManager.AccentColor;
-            Color defaultBg = isDark ? Color.FromArgb(60, 60, 60) : Color.OldLace;
-            Color activeFore = isDark ? Color.White : Color.FromArgb(30, 70, 32);
-            Color defaultFore = Modules.ThemeManager.TextColor;
-
             // 循环遍历，自动更新样式
             foreach (var item in modeMap)
             {
                 Button btn = item.Key;
                 bool isActive = item.Value;
 
-                btn.BackColor = isActive ? activeBg : defaultBg;
-                btn.ForeColor = isActive ? activeFore : defaultFore;
+                // 直接使用 ThemeManager 提供的颜色属性
+                btn.BackColor = isActive ? ThemeManager.AccentColor : ThemeManager.ButtonDefaultBg;
+                btn.ForeColor = isActive ? ThemeManager.ButtonActiveFore : ThemeManager.TextColor;
 
                 // 可选：如果是激活状态，可以稍微加粗字体或改变边框
                 // btn.Font = new Font(btn.Font, isActive ? FontStyle.Bold : FontStyle.Regular);
@@ -797,50 +800,6 @@ namespace mylabel
 
 
 
-
-
-
-
-        #region 导出栏
-        private void ExportOriginal_Click(object sender, EventArgs e)
-        {
-            DoExport("导出原翻译", ExportMode.Original);
-        }
-
-        private void ExportCurrent_Click(object sender, EventArgs e)
-        {
-            DoExport("导出新翻译", ExportMode.Current);
-        }
-
-        private void ExportDiff_Click(object sender, EventArgs e)
-        {
-            DoExport("导出修改文档", ExportMode.Diff);
-        }
-        private void DoExport(string title, ExportMode mode)
-        {
-            if (imageDatabase == null || imageDatabase.Count == 0) return;
-
-            using (SaveFileDialog sfd = new SaveFileDialog())
-            {
-                sfd.Filter = "文本文件|*.txt";
-                sfd.Title = title;
-                if (sfd.ShowDialog() == DialogResult.OK)
-                {
-                    try
-                    {
-                        string output = mylabel.Modules.Modules.LabelsToText(this.imageDatabase, _currentProject.ZipName, mode);
-                        File.WriteAllText(sfd.FileName, output, Encoding.UTF8);
-                        ShowMsg($"{title}成功！");
-                    }
-                    catch (Exception ex)
-                    {
-                        ShowMsg($"导出失败: {ex.Message}", true);
-                    }
-                }
-            }
-        }
-        #endregion
-
         #region 修改栏
         private void ModifyGroup_Click(object sender, EventArgs e)
         {
@@ -1031,6 +990,53 @@ namespace mylabel
             }
 
             PicView.Invalidate();
+        }
+        private void RefreshImageDatabase(IEnumerable<ImageInfo> imageNames)//负责处理字典转列表、绑定数据源和重置状态。
+        {
+            // 转换并更新字典与数据源
+            var list = imageNames?.ToList() ?? new List<ImageInfo>();// 安全转换列表（防止 source 为 null）
+            imageDatabase = list.GroupBy(x => x.ImageName)
+                                    .ToDictionary(g => g.Key, g => g.First());
+            PicNameBindingSource.DataSource = list;
+
+
+            UpdateGroupsFromSource(list);// 提取所有组别并更新 GroupPanel
+            // 统一处理 UI 复位
+            image = null; // 清除当前缓存图
+            bool hasData = list.Count > 0;
+            if (hasData) { PicNameBindingSource.Position = 0; RefreshImageDisplay(); fittoview(); }
+            else PicView.Invalidate();
+        }
+        private void UpdateGroupsFromSource(List<ImageInfo> list)
+        {
+            // 获取所有图片中出现过的组名，并去重
+            var allGroups = list
+                .SelectMany(img => img.Labels)
+                .Select(l => l.Group)
+                .Distinct()
+                .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)) // 保持之前的排序逻辑
+                .ThenBy(g => g)
+                .ToList();
+
+            // 如果是新文件完全没标签，至少给个默认初始值
+            if (allGroups.Count == 0)
+            {
+                allGroups.Add("框内");
+                allGroups.Add("框外");
+            }
+
+            // 3. 将结果同步到类级别的成员变量，供右键菜单（添加/删除）使用
+            _availableGroups = allGroups;
+
+            // 4. 设置初始选中项：
+            // 如果当前没有选中项，或者之前的选中项在新列表中不存在，则默认选第一个
+            if (string.IsNullOrEmpty(_currentSelectedGroup) || !_availableGroups.Contains(_currentSelectedGroup))
+            {
+                _currentSelectedGroup = _availableGroups.FirstOrDefault() ?? "";
+            }
+
+            // 5. 调用“伪绑定”方法生成 UI 控件
+            BindGroups(_availableGroups);
         }
         private void UpdateSnapshot()// 提取快照逻辑
         {
@@ -1607,7 +1613,7 @@ namespace mylabel
 
 
 
-        #region 文件处理相关
+        #region 文件处理
         private ProjectContext? _currentProject = ProjectContext.Empty;
         private void UpdateContext(string baseFolderPath, string? txtName, string? zipName)
         {
@@ -1621,7 +1627,7 @@ namespace mylabel
 
             // 2. 转换模型并刷新 UI 
             var infos = imageNames.Select(name => new ImageInfo { ImageName = name });
-            RefreshImageDatabaseUI(infos);
+            RefreshImageDatabase(infos);
 
             // 3. 撤销管理器状态重置
             _undoManager?.Clear();
@@ -1640,37 +1646,22 @@ namespace mylabel
                 ShowMsg($"预览模式已开启，共有 {imageDatabase.Count} 张图片。");
             }
         }
-        private void RefreshImageDatabaseUI(IEnumerable<ImageInfo> imageNames)//负责处理字典转列表、绑定数据源和重置状态。
-        {
-            // 转换并更新字典与数据源
-            var list = imageNames?.ToList() ?? new List<ImageInfo>();// 安全转换列表（防止 source 为 null）
-            imageDatabase = list.GroupBy(x => x.ImageName)
-                                    .ToDictionary(g => g.Key, g => g.First());
-            PicNameBindingSource.DataSource = list;
 
-
-            UpdateGroupsFromSource(list);// 提取所有组别并更新 GroupPanel
-            // 统一处理 UI 复位
-            image = null; // 清除当前缓存图
-            bool hasData = list.Count > 0;
-            if (hasData) { PicNameBindingSource.Position = 0; RefreshImageDisplay(); fittoview(); }
-            else PicView.Invalidate();
-        }
         #region 新建或预览或打开txt
         private void NewTranslation_Click(object sender, EventArgs e)// 按钮：新建文件夹翻译 (保存)
         {
             using var fbd = new FolderBrowserDialog { Description = "选择要新建翻译的文件夹" };
-            if (fbd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { fbd.SelectedPath }, true);
+            if (fbd.ShowDialog() == DialogResult.OK) OpenResourceByPath(new string[] { fbd.SelectedPath }, true);
         }
         private void NewZipTranslation_Click(object sender, EventArgs e)// 按钮：新建压缩包翻译 (保存)
         {
             using var ofd = new OpenFileDialog { Filter = "压缩文件|*.zip;*.7z;*.rar", Title = "选择压缩包创建翻译项目" };
-            if (ofd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { ofd.FileName }, true); // 新建模式
+            if (ofd.ShowDialog() == DialogResult.OK) OpenResourceByPath(new string[] { ofd.FileName }, true); // 新建模式
         }
         private void OpenFolderPicture_Click(object sender, EventArgs e)// 按钮：预览文件夹图片 (不保存)
         {
             using var fbd = new FolderBrowserDialog { Description = "选择要预览图片的文件夹" };
-            if (fbd.ShowDialog() == DialogResult.OK)OpenResourceByPath(new string[] { fbd.SelectedPath }, false); // 预览模式
+            if (fbd.ShowDialog() == DialogResult.OK) OpenResourceByPath(new string[] { fbd.SelectedPath }, false); // 预览模式
         }
         private void LabelMinusForm_DragEnter(object sender, DragEventArgs e)
         {
@@ -1697,7 +1688,7 @@ namespace mylabel
                 Title = "选择图片（支持多选）或压缩包（单个）",
                 Multiselect = true // 允许用户按住 Shift 或 Ctrl 多选
             };
-            if (ofd.ShowDialog() == DialogResult.OK)OpenResourceByPath(ofd.FileNames, false);
+            if (ofd.ShowDialog() == DialogResult.OK) OpenResourceByPath(ofd.FileNames, false);
         }
         private void OpenTranslation_Click(object sender, EventArgs e)
         {
@@ -1725,20 +1716,21 @@ namespace mylabel
                 string? finalSourceName = File.Exists(fullSourcePath) ? ZipName : null;// 如果文件不存在，则将 sourceName 设为 null (回归文件夹模式)
 
 
-                // 4. 获取图片列表 (从解析出来的数据库 Key 中提取)
-                var imageNames = db.Values.Select(v => v.ImageName);
-                // 5. 状态重置：移除已修改标记，因为这是刚打开的文件
-                foreach (var img in db.Values) img.ResetModificationFlags();
+                // 4. 直接更新上下文
+                UpdateContext(folder, txtName, finalSourceName);
 
-                // 6. 统一通过 SetupProject 初始化，但要保留解析出来的 db.Values (包含具体的翻译文本内容)
-                SetupProject(imageNames, folder, txtName, finalSourceName, false);
-                RefreshImageDatabaseUI(db.Values);
+                // 2. 重置状态
+                _undoManager?.Clear();
+                _undoManager?.MarkAsSaved();
+
+                // 3. 直接使用解析好的数据刷新 UI (包含翻译内容)
+                RefreshImageDatabase(db.Values);
 
                 ShowMsg($"成功加载翻译：{txtName}");
             }
             catch (Exception ex) { ShowMsg("解析失败: " + ex.Message, true); }
         }
-        private void OpenResourceByPath(string[] paths,bool isCreateMode)// 核心逻辑提取：根据输入的路径自动识别并加载项目
+        public void OpenResourceByPath(string[] paths, bool isCreateMode)// 核心逻辑提取：根据输入的路径自动识别并加载项目
         {
             if (paths == null || paths.Length == 0) return;
 
@@ -1746,6 +1738,16 @@ namespace mylabel
             string ext = Path.GetExtension(firstPath).ToLower();
             string folder = Path.GetDirectoryName(firstPath) ?? string.Empty;
 
+            // 筛选出所有存在的图片文件
+            var imageFiles = paths.Where(p => File.Exists(p) && imageExtensions.Contains(Path.GetExtension(p).ToLower())).ToList();
+            if (imageFiles.Count > 0)
+            {
+                string folders = Path.GetDirectoryName(imageFiles[0]) ?? string.Empty;
+                var imageNames = imageFiles.Select(Path.GetFileName).ToList();
+                // 多图模式通常不关联特定的 Zip，也不立即保存 txt（除非逻辑特殊）
+                SetupProject(imageNames, folders, null, null, isCreateMode);
+                return;
+            }
             // 1. 处理翻译文档 (.txt)
             if (ext == ".txt")
             {
@@ -1769,7 +1771,10 @@ namespace mylabel
             if (Directory.Exists(firstPath))
             {
                 var imageNames = GetFolderImages(firstPath);
-                SetupProject(imageNames, folder, null, null, isCreateMode);
+
+                // 修改点：这里传入 firstPath (当前选中的文件夹路径)，而不是 folder (上级目录)
+                SetupProject(imageNames, firstPath, null, null, isCreateMode);
+                return;
             }
         }
         private IEnumerable<string> GetFolderImages(string folderPath)// 文件夹模式通用提取逻辑
@@ -1831,37 +1836,7 @@ namespace mylabel
             return sfd.ShowDialog() == DialogResult.OK ? sfd.FileName : null;
         }
         #endregion
-        private void UpdateGroupsFromSource(List<ImageInfo> list)
-        {
-            // 获取所有图片中出现过的组名，并去重
-            var allGroups = list
-                .SelectMany(img => img.Labels)
-                .Select(l => l.Group)
-                .Distinct()
-                .OrderBy(g => g == "框内" ? 0 : (g == "框外" ? 1 : 2)) // 保持之前的排序逻辑
-                .ThenBy(g => g)
-                .ToList();
 
-            // 如果是新文件完全没标签，至少给个默认初始值
-            if (allGroups.Count == 0)
-            {
-                allGroups.Add("框内");
-                allGroups.Add("框外");
-            }
-
-            // 3. 将结果同步到类级别的成员变量，供右键菜单（添加/删除）使用
-            _availableGroups = allGroups;
-
-            // 4. 设置初始选中项：
-            // 如果当前没有选中项，或者之前的选中项在新列表中不存在，则默认选第一个
-            if (string.IsNullOrEmpty(_currentSelectedGroup) || !_availableGroups.Contains(_currentSelectedGroup))
-            {
-                _currentSelectedGroup = _availableGroups.FirstOrDefault() ?? "";
-            }
-
-            // 5. 调用“伪绑定”方法生成 UI 控件
-            BindGroups(_availableGroups);
-        }
         private void OpenNowFolder_Click(object sender, EventArgs e)
         {
             // 1. 检查当前是否已经打开了翻译文件或确定了文件夹
@@ -1892,7 +1867,61 @@ namespace mylabel
 
 
         #region 修改图片集
-        private void Changeimageinfo_Click(object sender, EventArgs e)
+        private void AssociateZip_Click(object sender, EventArgs e)
+        {
+            // 1. 前提检查：必须先有图片数据才能关联
+            if (imageDatabase == null || imageDatabase.Count == 0)
+            {
+                ShowMsg("当前没有任何图片数据，无法关联素材包。", true);
+                return;
+            }
+
+            // 2. 让用户选择新的压缩包
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "压缩文件|*.zip;*.7z;*.rar",
+                Title = "在当前文件夹选择要关联的素材压缩包",
+                InitialDirectory = _currentProject.BaseFolderPath
+            };
+
+            if (ofd.ShowDialog() != DialogResult.OK) return;
+
+            // 3. 提取新路径信息
+            string newZipPath = ofd.FileName;
+            string newFolder = Path.GetDirectoryName(newZipPath)!;
+            string newZipName = Path.GetFileName(newZipPath);
+
+            // 规范化路径，处理 ./ 或 ../ 等情况，并忽略大小写差异
+            string normalizedBaseFolder = Path.GetFullPath(_currentProject.BaseFolderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string normalizedNewFolder = Path.GetFullPath(newFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            if (!string.Equals(normalizedBaseFolder, normalizedNewFolder, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowMsg("关联失败：所选压缩包必须与当前项目位于同一文件夹内！", true);
+                return;
+            }
+            // 4. (核心) 验证压缩包内容与当前数据库的匹配度
+            var zipEntries = ArchiveHelper.GetImageEntries(newZipPath).ToList();
+            int matchCount = imageDatabase.Keys.Count(k => zipEntries.Contains(k));
+
+            if (matchCount == 0)
+            {
+                ShowMsg("关联失败：所选压缩包内不包含当前项目中的任何图片文件名！", true);
+                return;
+            }
+
+            // 5. 更新上下文 (保留当前的 TxtName)
+            UpdateContext(newFolder, _currentProject.TxtName, newZipName);
+
+            // 6. 标记项目已修改（因为关联素材变了，需要保存 .txt 头部信息）
+            _undoManager?.MarkAsUnsaved();
+
+            ShowMsg($"已关联新压缩包：{newZipName} (匹配到 {matchCount} 张图片)");
+
+            // 7. 强制刷新预览图
+            RefreshUI(true);
+        }//修改关联压缩包
+        private void Changeimageinfo_Click(object sender, EventArgs e)//修改图片集
         {
             // 1. 检查前提条件
             if (string.IsNullOrWhiteSpace(_currentProject.BaseFolderPath))
@@ -1950,7 +1979,7 @@ namespace mylabel
 
             // 5. 刷新 UI 和 保存文件
             // 这里的 RefreshImageDatabaseUI 需要能接受 Dictionary 或 Values
-            RefreshImageDatabaseUI(imageDatabase.Values.OrderBy(x => x.ImageName).ToList());
+            RefreshImageDatabase(imageDatabase.Values.OrderBy(x => x.ImageName).ToList());
 
             // 调用你之前的保存逻辑(先不保存)
             //string content = LabelsToText(imageDatabase, ExportMode.Current);
@@ -1968,7 +1997,7 @@ namespace mylabel
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.FormBorderStyle = FormBorderStyle.FixedDialog;
 
-                Panel topPanel = new() { Dock = DockStyle.Top, Height = 60, Padding = new Padding(10) };
+                Panel topPanel = new() { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10) };
                 Label lblSource = new()
                 {
                     Text = $"路径：{sourceDetail}\n未勾选图片的标记将会删除",
@@ -2010,56 +2039,14 @@ namespace mylabel
             }
         }
         #endregion
-        private void AssociateZip_Click(object sender, EventArgs e)
-        {
-            // 1. 前提检查：必须先有图片数据才能关联
-            if (imageDatabase == null || imageDatabase.Count == 0)
-            {
-                ShowMsg("当前没有任何图片数据，无法关联素材包。", true);
-                return;
-            }
 
-            // 2. 让用户选择新的压缩包
-            using var ofd = new OpenFileDialog
-            {
-                Filter = "压缩文件|*.zip;*.7z;*.rar",
-                Title = "选择要关联的素材压缩包",
-                InitialDirectory = _currentProject.BaseFolderPath
-            };
 
-            if (ofd.ShowDialog() != DialogResult.OK) return;
 
-            // 3. 提取新路径信息
-            string newZipPath = ofd.FileName;
-            string newFolder = Path.GetDirectoryName(newZipPath)!;
-            string newZipName = Path.GetFileName(newZipPath);
 
-            // 4. (核心) 验证压缩包内容与当前数据库的匹配度
-            var zipEntries = ArchiveHelper.GetImageEntries(newZipPath).ToList();
-            int matchCount = imageDatabase.Keys.Count(k => zipEntries.Contains(k));
 
-            if (matchCount == 0)
-            {
-                ShowMsg("关联失败：所选压缩包内不包含当前项目中的任何图片文件名！", true);
-                return;
-            }
 
-            // 5. 更新上下文 (保留当前的 TxtName)
-            UpdateContext(newFolder, _currentProject.TxtName, newZipName);
 
-            // 6. 标记项目已修改（因为关联素材变了，需要保存 .txt 头部信息）
-            _undoManager?.MarkAsUnsaved();
-
-            ShowMsg($"已关联新压缩包：{newZipName} (匹配到 {matchCount} 张图片)");
-
-            // 7. 强制刷新预览图
-            RefreshUI(true);
-        }
         #endregion
-
-
-        
-
 
 
     }
@@ -2090,7 +2077,7 @@ namespace mylabel
                 : string.Empty;
         public bool IsArchiveMode => !string.IsNullOrEmpty(ZipName);
         // 计算属性：生成标题栏文字
-        public string DisplayTitle => $"LabelMinus - {TxtName} [{(IsArchiveMode ? $"关联压缩包:{ZipName}" : "文件夹")}]";
+        public string DisplayTitle => $"LabelMinus - {TxtName} [{(IsArchiveMode ? $"关联:{ZipName}" : "文件夹")}]";
     }
 
 }

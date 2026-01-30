@@ -89,8 +89,8 @@
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(PicReview2_Placeholder);
-            splitContainer1.Size = new Size(800, 340);
-            splitContainer1.SplitterDistance = 400;
+            splitContainer1.Size = new Size(984, 451);
+            splitContainer1.SplitterDistance = 492;
             splitContainer1.TabIndex = 2;
             // 
             // PicReview1_Placeholder
@@ -100,7 +100,7 @@
             PicReview1_Placeholder.Dock = DockStyle.Fill;
             PicReview1_Placeholder.Location = new Point(0, 0);
             PicReview1_Placeholder.Name = "PicReview1_Placeholder";
-            PicReview1_Placeholder.Size = new Size(400, 340);
+            PicReview1_Placeholder.Size = new Size(492, 451);
             PicReview1_Placeholder.TabIndex = 0;
             PicReview1_Placeholder.TabStop = false;
             PicReview1_Placeholder.Click += PicView_Click;
@@ -116,7 +116,7 @@
             PicReview2_Placeholder.Dock = DockStyle.Fill;
             PicReview2_Placeholder.Location = new Point(0, 0);
             PicReview2_Placeholder.Name = "PicReview2_Placeholder";
-            PicReview2_Placeholder.Size = new Size(396, 340);
+            PicReview2_Placeholder.Size = new Size(488, 451);
             PicReview2_Placeholder.TabIndex = 0;
             PicReview2_Placeholder.TabStop = false;
             PicReview2_Placeholder.Click += PicView_Click;
@@ -144,13 +144,13 @@
             tableLayoutPanel1.Name = "tableLayoutPanel1";
             tableLayoutPanel1.RowCount = 1;
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel1.Size = new Size(800, 60);
+            tableLayoutPanel1.Size = new Size(984, 60);
             tableLayoutPanel1.TabIndex = 3;
             // 
             // ChangePic2
             // 
             ChangePic2.Dock = DockStyle.Bottom;
-            ChangePic2.Location = new Point(722, 27);
+            ChangePic2.Location = new Point(906, 27);
             ChangePic2.Name = "ChangePic2";
             ChangePic2.Size = new Size(75, 30);
             ChangePic2.TabIndex = 4;
@@ -166,7 +166,7 @@
             panel1.Controls.Add(LastPic);
             panel1.Controls.Add(NextPic);
             panel1.Dock = DockStyle.Fill;
-            panel1.Location = new Point(200, 3);
+            panel1.Location = new Point(292, 3);
             panel1.Name = "panel1";
             panel1.Size = new Size(400, 54);
             panel1.TabIndex = 2;
@@ -279,7 +279,7 @@
             panel6.Controls.Add(Openfolder2);
             panel6.Controls.Add(OpenPicandArc2);
             panel6.Dock = DockStyle.Right;
-            panel6.Location = new Point(603, 0);
+            panel6.Location = new Point(787, 0);
             panel6.Margin = new Padding(0);
             panel6.Name = "panel6";
             panel6.Size = new Size(116, 60);
@@ -332,11 +332,11 @@
             tableLayoutPanel2.Controls.Add(label1, 3, 0);
             tableLayoutPanel2.Controls.Add(panel4, 1, 0);
             tableLayoutPanel2.Dock = DockStyle.Bottom;
-            tableLayoutPanel2.Location = new Point(0, 400);
+            tableLayoutPanel2.Location = new Point(0, 511);
             tableLayoutPanel2.Name = "tableLayoutPanel2";
             tableLayoutPanel2.RowCount = 1;
             tableLayoutPanel2.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel2.Size = new Size(800, 50);
+            tableLayoutPanel2.Size = new Size(984, 50);
             tableLayoutPanel2.TabIndex = 4;
             // 
             // FittoReViewButton
@@ -353,7 +353,7 @@
             // panel2
             // 
             panel2.Controls.Add(LinkView);
-            panel2.Location = new Point(355, 3);
+            panel2.Location = new Point(447, 3);
             panel2.Name = "panel2";
             panel2.Size = new Size(90, 44);
             panel2.TabIndex = 3;
@@ -374,7 +374,7 @@
             panel3.AutoSize = true;
             panel3.Controls.Add(ClearPic);
             panel3.Dock = DockStyle.Fill;
-            panel3.Location = new Point(722, 3);
+            panel3.Location = new Point(906, 3);
             panel3.Name = "panel3";
             panel3.Size = new Size(75, 44);
             panel3.TabIndex = 4;
@@ -383,7 +383,7 @@
             // 
             label1.AutoSize = true;
             label1.Dock = DockStyle.Right;
-            label1.Location = new Point(558, 0);
+            label1.Location = new Point(742, 0);
             label1.Name = "label1";
             label1.Size = new Size(158, 50);
             label1.TabIndex = 3;
@@ -399,13 +399,13 @@
             panel4.Dock = DockStyle.Fill;
             panel4.Location = new Point(84, 3);
             panel4.Name = "panel4";
-            panel4.Size = new Size(265, 44);
+            panel4.Size = new Size(357, 44);
             panel4.TabIndex = 5;
             // 
             // label2
             // 
             label2.Dock = DockStyle.Right;
-            label2.Location = new Point(113, 0);
+            label2.Location = new Point(205, 0);
             label2.Name = "label2";
             label2.Size = new Size(56, 44);
             label2.TabIndex = 9;
@@ -428,7 +428,7 @@
             ShowShotScreen.BackColor = Color.Transparent;
             ShowShotScreen.BorderStyle = BorderStyle.FixedSingle;
             ShowShotScreen.Dock = DockStyle.Right;
-            ShowShotScreen.Location = new Point(169, 0);
+            ShowShotScreen.Location = new Point(261, 0);
             ShowShotScreen.Name = "ShowShotScreen";
             ShowShotScreen.Size = new Size(96, 44);
             ShowShotScreen.SizeMode = PictureBoxSizeMode.Zoom;
@@ -441,7 +441,7 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
+            ClientSize = new Size(984, 561);
             Controls.Add(splitContainer1);
             Controls.Add(tableLayoutPanel2);
             Controls.Add(tableLayoutPanel1);

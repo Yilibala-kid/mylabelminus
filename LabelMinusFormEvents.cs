@@ -1,4 +1,8 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.Win32;
+using System.Diagnostics;
+using System.Security.Principal;
+using System.Text;
+using static mylabel.Modules.Modules;
 
 namespace mylabel
 {
@@ -141,6 +145,8 @@ namespace mylabel
                 e.ToolTipSize = new Size(textSize.Width + 15, textSize.Height + 15);
             }
         }
+
+        #region 图片显示调整相关
         private void FittoView(object sender, EventArgs e)
         {
             fittoview();
@@ -212,6 +218,29 @@ namespace mylabel
 
             PicView.Invalidate();
         }
+        private void LockX_Click(object sender, EventArgs e)// 锁定横向按钮 (X 轴不动，只能上下移)
+        {
+            isXLocked = !isXLocked;
+            UpdateLockButtonUI(sender as Button, isXLocked);
+        }
+
+
+        private void LockY_Click(object sender, EventArgs e)// 锁定竖直按钮 (Y 轴不动，只能左右移)
+        {
+            isYLocked = !isYLocked;
+            UpdateLockButtonUI(sender as Button, isYLocked);
+        }
+
+
+        private void UpdateLockButtonUI(Button btn, bool isLocked)// 通用的 UI 反馈方法
+        {
+            Color oricolor = Modules.ThemeManager.IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+            if (btn != null)
+            {
+                // 改变颜色或图标以示区别
+                btn.BackColor = isLocked ? Color.LightCoral : oricolor;
+            }
+        }
         private void LP_Click(object sender, EventArgs e)
         {
             PicNameBindingSource.MovePrevious();
@@ -238,7 +267,8 @@ namespace mylabel
             }
         }
         #endregion
-
+        #endregion
+        #region 显示栏
         private void ParamHide_Click(object sender, EventArgs e)
         {
             if (ParamHide.Checked) Parampanel1.Visible = true;
@@ -285,32 +315,30 @@ namespace mylabel
             }
             fittoview();
         }
-
-        // 锁定横向按钮 (X 轴不动，只能上下移)
-        private void LockX_Click(object sender, EventArgs e)
+        private void LabelViewIndexShow_Click(object sender, EventArgs e)
         {
-            isXLocked = !isXLocked;
-            UpdateLockButtonUI(sender as Button, isXLocked);
-        }
-
-        // 锁定竖直按钮 (Y 轴不动，只能左右移)
-        private void LockY_Click(object sender, EventArgs e)
-        {
-            isYLocked = !isYLocked;
-            UpdateLockButtonUI(sender as Button, isYLocked);
-        }
-
-        // 通用的 UI 反馈方法
-        private void UpdateLockButtonUI(Button btn, bool isLocked)
-        {
-            Color oricolor = Modules.ThemeManager.IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
-            if (btn != null)
+            if (LabelView.Columns.Contains("LabelIndex"))
             {
-                // 改变颜色或图标以示区别
-                btn.BackColor = isLocked ? Color.LightCoral : oricolor;
+                LabelView.Columns["LabelIndex"].Visible = LabelViewIndexShow.Checked;
             }
         }
-
+        private void LabelViewGroupShow_Click(object sender, EventArgs e)
+        {
+            if (LabelView.Columns.Contains("LabelGroup"))
+            {
+                LabelView.Columns["LabelGroup"].Visible = LabelViewGroupShow.Checked;
+            }
+        }
+        private void PicViewGroup_Click(object sender, EventArgs e)
+        {
+            PicView.Invalidate();
+        }
+        private void PicViewText_Click(object sender, EventArgs e)
+        {
+            PicView.Invalidate();
+        }
+        #endregion
+        #region 温馨提示功能
         private void ToGithub_Click(object sender, EventArgs e)
         {
             string url = "https://github.com/Yilibala-kid/mylabelminus";
@@ -334,23 +362,6 @@ namespace mylabel
             var texts = "请将翻译文本与压缩包放在同一文件夹内";
             ShowMsg(texts);
         }
-        #region 功能模式栏
-        private void LabelMode_Click(object sender, EventArgs e)
-        {
-            SetMode("LabelMode");
-        }
-        private void TextReviewMode_Click(object sender, EventArgs e)
-        {
-            SetMode(_currentDownAction == DoTextReviewMouseDown ? "LabelMode" : "TextReview");
-        }
-        private void OCRMode_Click(object sender, EventArgs e)
-        {
-            SetMode(_currentDownAction == DoOCRMouseDown ? "LabelMode" : "OCR");
-        }
-
-
-        #endregion
-
         private void MessageTimer_Tick(object sender, EventArgs e)
         {
             MessageLabel.Text = ""; // 恢复默认文字
@@ -368,31 +379,248 @@ namespace mylabel
 
             MessageTimer.Start();
         }
-        private void LabelViewIndexShow_Click(object sender, EventArgs e)
+        #endregion
+        #region 功能模式栏
+        private void LabelMode_Click(object sender, EventArgs e)
         {
-            if (LabelView.Columns.Contains("LabelIndex"))
+            SetMode("LabelMode");
+        }
+        private void TextReviewMode_Click(object sender, EventArgs e)
+        {
+            SetMode(_currentDownAction == DoTextReviewMouseDown ? "LabelMode" : "TextReview");
+        }
+        private void OCRMode_Click(object sender, EventArgs e)
+        {
+            SetMode(_currentDownAction == DoOCRMouseDown ? "LabelMode" : "OCR");
+        }
+
+
+        #endregion
+        #region 导出栏
+        private void ExportOriginal_Click(object sender, EventArgs e)
+        {
+            DoExport("导出原翻译", ExportMode.Original);
+        }
+
+        private void ExportCurrent_Click(object sender, EventArgs e)
+        {
+            DoExport("导出新翻译", ExportMode.Current);
+        }
+
+        private void ExportDiff_Click(object sender, EventArgs e)
+        {
+            DoExport("导出修改文档", ExportMode.Diff);
+        }
+        private void DoExport(string title, ExportMode mode)
+        {
+            if (imageDatabase == null || imageDatabase.Count == 0) return;
+
+            using (SaveFileDialog sfd = new SaveFileDialog())
             {
-                LabelView.Columns["LabelIndex"].Visible = LabelViewIndexShow.Checked;
+                sfd.Filter = "文本文件|*.txt";
+                sfd.Title = title;
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        string output = mylabel.Modules.Modules.LabelsToText(this.imageDatabase, _currentProject.ZipName, mode);
+                        File.WriteAllText(sfd.FileName, output, Encoding.UTF8);
+                        ShowMsg($"{title}成功！");
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowMsg($"导出失败: {ex.Message}", true);
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region 右键打开文件的逻辑/注册表注册删除  
+        // 定义右键菜单的名称，保持与注册表一致
+        private const string ContextMenuName = "使用LabelMinus打开";
+        private readonly string[] TargetExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".zip", ".7z", ".rar", ".txt" };
+        // 检查当前是否是管理员
+        private bool IsRunAsAdmin()
+        {
+            WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            WindowsPrincipal principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        // 以管理员身份重启程序
+        private void RestartAsAdmin()
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.UseShellExecute = true;
+            startInfo.WorkingDirectory = Environment.CurrentDirectory;
+            startInfo.FileName = Application.ExecutablePath;
+            startInfo.Verb = "runas"; // 关键：触发 UAC 提权弹窗
+
+            try
+            {
+                Process.Start(startInfo);
+                Application.Exit(); // 退出当前普通权限的进程
+            }
+            catch (Exception)
+            {
+                // 如果用户在 UAC 弹窗点击了“否”
+                MessageBox.Show("未获得管理员权限，无法执行注册表操作。", "提示");
+            }
+        }
+        // 【核心方法】切换右键菜单状态
+        private void ToggleContextMenu()
+        {
+            // --- 新增权限检查 ---
+            if (!IsRunAsAdmin())
+            {
+                var result = MessageBox.Show(
+                    "修改右键菜单需要管理员权限。是否以管理员身份重启程序？",
+                    "权限请求",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    RestartAsAdmin();
+                }
+                return; // 结束当前逻辑
+            }
+
+            // --- 原有的逻辑保持不变 ---
+            if (IsContextMenuInstalled())
+            {
+                UninstallContextMenu();
+                ShowMsg("右键菜单功能已关闭。");
+            }
+            else
+            {
+                InstallContextMenu();
+                ShowMsg("右键菜单功能已开启！现在可以在文件或文件夹上右键使用了。");
+            }
+            UpdateContextMenuButtonState();
+        }
+
+        // 检查右键菜单是否已安装
+        private bool IsContextMenuInstalled()
+        {
+            // 检查 .jpg 的关联是否存在作为判断标准
+            string checkPath = $@"SystemFileAssociations\.jpg\shell\{ContextMenuName}";
+            using (var key = Registry.ClassesRoot.OpenSubKey(checkPath))
+            {
+                return key != null;
             }
         }
 
-        private void LabelViewGroupShow_Click(object sender, EventArgs e)
+        // 安装（写入注册表）
+        private void InstallContextMenu()
         {
-            if (LabelView.Columns.Contains("LabelGroup"))
+            string rawExePath = Application.ExecutablePath; // 获取当前程序完整路径
+            string quotedExePath = $"\"{rawExePath}\"";
+            try
             {
-                LabelView.Columns["LabelGroup"].Visible = LabelViewGroupShow.Checked;
+                foreach (string ext in TargetExtensions)
+                {
+                    string keyPath = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}";
+                    using (var key = Registry.ClassesRoot.CreateSubKey(keyPath))
+                    {
+                        key.SetValue("", "用 LabelMinus 打开");
+
+                        // --- 图标可以带 ,0 ---
+                        key.SetValue("Icon", $"{rawExePath},0");
+
+                        using (var commandKey = key.CreateSubKey("command"))
+                        {
+                            // 正确格式应该是: "C:\...\LabelMinus.exe" "%1"
+                            commandKey.SetValue("", $"{quotedExePath} \"%1\"");
+                        }
+                    }
+                }
+
+                // 依然保留文件夹的注册，方便直接打开整个目录
+                using (var dirKey = Registry.ClassesRoot.CreateSubKey($@"Directory\shell\{ContextMenuName}"))
+                {
+                    dirKey.SetValue("", "用 LabelMinus 预览文件夹");
+                    dirKey.SetValue("Icon", $"{rawExePath},0");
+                    using (var dirCommand = dirKey.CreateSubKey("command"))
+                    {
+                        dirCommand.SetValue("", $"{quotedExePath} \"%1\"");
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"注册表写入失败，请尝试以管理员身份运行程序。\n错误信息：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void PicViewGroup_Click(object sender, EventArgs e)
+        // 卸载（删除注册表项）
+        private void UninstallContextMenu()
         {
-            PicView.Invalidate();
+            try
+            {
+                foreach (string ext in TargetExtensions)
+                {
+                    string keyPath = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}";
+                    Registry.ClassesRoot.DeleteSubKeyTree(keyPath, false);
+                }
+
+                // 清理文件夹注册
+                Registry.ClassesRoot.DeleteSubKeyTree($@"Directory\shell\{ContextMenuName}", false);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"移除右键菜单失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
-        private void PicViewText_Click(object sender, EventArgs e)
+        // 更新按钮文字状态
+        private void UpdateContextMenuButtonState()
         {
-            PicView.Invalidate();
+            bool isInstalled = IsContextMenuInstalled();
+
+            // 直接访问名为 EasyRightClick 的 ToolStripMenuItem
+            // (前提是你在设计器中添加了这个菜单项，并且 Name 属性为 EasyRightClick)
+            if (EasyRightClick != null)
+            {
+                EasyRightClick.Checked = isInstalled;
+            }
         }
+        private void EasyRightClick_Click(object sender, EventArgs e)
+        {
+            // 点击菜单时，直接调用你之前的 Toggle 方法
+            ToggleContextMenu();
+        }
+
+        private List<string> pathBuffer = new List<string>();
+        private System.Windows.Forms.Timer openTimer;
+
+        // 在构造函数或 Load 事件中初始化计时器
+        private void openTimer_Tick(object sender, EventArgs e)
+        {
+            openTimer.Stop();
+            if (pathBuffer.Count > 0)
+            {
+                // 一次性打开所有收集到的路径
+                string[] pathsToOpen = pathBuffer.ToArray();
+                pathBuffer.Clear();
+                this.OpenResourceByPath(pathsToOpen, false);
+            }
+        }
+        // 暴露一个给外部调用的缓冲方法
+        public void EnqueuePaths(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+
+            // 如果这是第一个路径，启动计时器
+            if (pathBuffer.Count == 0) openTimer.Start();
+
+            pathBuffer.Add(path);
+            openTimer.Stop();
+            openTimer.Start();
+        }
+        #endregion
 
     }
 }

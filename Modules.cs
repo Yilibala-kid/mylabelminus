@@ -55,7 +55,7 @@ namespace mylabel.Modules
                     using var textFont = GetSafeFont(label.FontFamily, fontSize);
 
                     // 如果没显示序号，文字就从 Y 坐标开始画；如果显示了序号，向下偏移
-                    float textY = showIndex ? y + fontsize: y;
+                    float textY = showIndex ? y + fontsize : y;
                     g.DrawString(label.Text, textFont, themeBrush, x, textY, vFormat);
                 }
             }
@@ -296,38 +296,54 @@ namespace mylabel.Modules
         public static bool IsDarkMode { get; private set; } = false;
 
         // --- 1. 核心颜色定义 (私有) ---
-        // 黑暗模式
-        private static readonly Color Dark_Win = Color.FromArgb(25, 25, 25);
-        private static readonly Color Dark_Pnl = Color.FromArgb(40, 40, 40);
-        private static readonly Color Dark_Img = Color.FromArgb(20, 20, 20);
-        private static readonly Color Dark_Txt = Color.FromArgb(220, 220, 220);
-        private static readonly Color Dark_Act = Color.FromArgb(45, 90, 48);
-        private static readonly Color Dark_Bdr = Color.FromArgb(70, 70, 70);
+        private static readonly ColorTable DarkColor = new ColorTable
+        {
+            Win = Color.FromArgb(25, 25, 25),    // 窗口背景颜色
+            Pnl = Color.FromArgb(40, 40, 40),    // 面板背景颜色
+            Img = Color.FromArgb(20, 20, 20),    // 图像背景颜色
+            Txt = Color.FromArgb(220, 220, 220), // 文本颜色
+            Act = Color.FromArgb(45, 90, 48),    // 活动状态颜色
+            Bdr = Color.FromArgb(70, 70, 70),    // 边框颜色
+            InputActiveBg = Color.FromArgb(65, 65, 65), // 输入框激活时的背景颜色
+            InputIdleBg = Color.FromArgb(35, 35, 35),   // 输入框空闲时的背景颜色
+            InputActiveText = Color.White,        // 输入框激活时的文本颜色
+            InputIdleText = Color.Gray,            // 输入框空闲时的文本颜色
+            BtnDefaultBg = Color.FromArgb(60, 60, 60),// 按钮默认背景颜色
+            BtnActiveFore = Color.White           // 按钮激活时的前景颜色
 
-        // 白天模式
-        private static readonly Color Light_Win = SystemColors.Control;
-        private static readonly Color Light_Pnl = Color.PeachPuff;
-        private static readonly Color Light_Img = Color.SeaShell; // 你的 SeaShell
-        private static readonly Color Light_Txt = SystemColors.ControlText;
-        private static readonly Color Light_Act = Color.LightGreen;
-        private static readonly Color Light_Bdr = Color.FromArgb(210, 205, 195);
+        };
 
-        // --- 2. 对外统一接口 (利用三元表达式简化) ---
-        public static Color BackColor => IsDarkMode ? Dark_Win : Light_Win;
-        public static Color PanelColor => IsDarkMode ? Dark_Pnl : Light_Pnl;
-        public static Color PicViewBg => IsDarkMode ? Dark_Img : Light_Img;
-        public static Color TextColor => IsDarkMode ? Dark_Txt : Light_Txt;
-        public static Color AccentColor => IsDarkMode ? Dark_Act : Light_Act;
-        public static Color BorderColor => IsDarkMode ? Dark_Bdr : Light_Bdr;
-        // 输入激活状态：黑暗模式用深灰，白天用纯白
-        public static Color InputActiveBg => IsDarkMode ? Color.FromArgb(65, 65, 65) : Color.White;
+        private static readonly ColorTable LightColor = new ColorTable
+        {
+            Win = SystemColors.Control,
+            Pnl = Color.PeachPuff,
+            Img = Color.SeaShell,
+            Txt = SystemColors.ControlText,
+            Act = Color.LightGreen,
+            Bdr = Color.FromArgb(210, 205, 195),
+            InputActiveBg = Color.White,
+            InputIdleBg = Color.AntiqueWhite,
+            InputActiveText = Color.Black,
+            InputIdleText = Color.Gray,
+            BtnDefaultBg = Color.OldLace,
+            BtnActiveFore = Color.FromArgb(30, 70, 32)
+        };
 
-        // 输入闲置状态：黑暗模式用近黑，白天用你喜欢的 AntiqueWhite
-        public static Color InputIdleBg => IsDarkMode ? Color.FromArgb(35, 35, 35) : Color.AntiqueWhite;
+        private static ColorTable CurrentColors => IsDarkMode ? DarkColor : LightColor;
 
-        // 对应的文字颜色
-        public static Color InputActiveText => IsDarkMode ? Color.White : Color.Black;
-        public static Color InputIdleText => Color.Gray;
+        // --- 2. 对外统一接口 ---
+        public static Color BackColor => CurrentColors.Win;
+        public static Color PanelColor => CurrentColors.Pnl;
+        public static Color PicViewBg => CurrentColors.Img;
+        public static Color TextColor => CurrentColors.Txt;
+        public static Color AccentColor => CurrentColors.Act;
+        public static Color BorderColor => CurrentColors.Bdr;
+        public static Color InputActiveBg => CurrentColors.InputActiveBg;
+        public static Color InputIdleBg => CurrentColors.InputIdleBg;
+        public static Color InputActiveText => CurrentColors.InputActiveText;
+        public static Color InputIdleText => CurrentColors.InputIdleText;
+        public static Color ButtonDefaultBg => CurrentColors.BtnDefaultBg;
+        public static Color ButtonActiveFore => CurrentColors.BtnActiveFore;
         /// <summary>
         /// 切换主题的主入口
         /// </summary>
@@ -361,22 +377,10 @@ namespace mylabel.Modules
                         sp.BackColor = PanelColor;
                         break;
                     case Panel p:
-                        if (p.Name == "LabelViewpanel" || p.Name == "Textboxpanel")
-                        {
-                            p.BackColor = Color.RoyalBlue;
-                        }
-                        else if (p.Name == "PicView")
-                        {
-                            p.BackColor = PicViewBg;
-                        }
-                        else
-                            p.BackColor = PanelColor;
+                        SetPanelColor(p);
                         break;
                     case Button btn:
-                        btn.FlatStyle = FlatStyle.Flat;
-                        btn.BackColor = IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
-                        btn.FlatAppearance.BorderColor = IsDarkMode ? BorderColor : Color.Tan; // 使用你定义的 BorderColor
-                        btn.FlatAppearance.BorderSize = 2;
+                        SetButtonColor(btn);
                         break;
                     case DataGridView dgv:
                         ApplyDgvTheme(dgv);
@@ -400,6 +404,30 @@ namespace mylabel.Modules
                 ctrl.ForeColor = TextColor;
                 if (ctrl.HasChildren) ProcessControls(ctrl.Controls);
             }
+        }
+        private static void SetPanelColor(Panel p)
+        {
+            switch (p.Name)
+            {
+                case "LabelViewpanel":
+                case "Textboxpanel":
+                    p.BackColor = Color.RoyalBlue;
+                    break;
+                case "PicView":
+                    p.BackColor = PicViewBg;
+                    break;
+                default:
+                    p.BackColor = PanelColor;
+                    break;
+            }
+        }
+
+        private static void SetButtonColor(Button btn)
+        {
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.BackColor = IsDarkMode ? Color.FromArgb(60, 60, 60) : Color.OldLace;
+            btn.FlatAppearance.BorderColor = IsDarkMode ? BorderColor : Color.Tan;
+            btn.FlatAppearance.BorderSize = 2;
         }
         public class DarkThemeRenderer : ToolStripProfessionalRenderer
         {
@@ -433,7 +461,7 @@ namespace mylabel.Modules
         {
             dgv.BackgroundColor = BackColor;
             dgv.GridColor = BorderColor;
-            dgv.DefaultCellStyle.BackColor = IsDarkMode ? Dark_Pnl : Color.White;
+            dgv.DefaultCellStyle.BackColor = IsDarkMode ? DarkColor.Pnl : Color.White;
             dgv.DefaultCellStyle.ForeColor = TextColor;
             dgv.DefaultCellStyle.SelectionBackColor = Color.RoyalBlue;
             dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
@@ -454,6 +482,22 @@ namespace mylabel.Modules
                 int v = dark ? 1 : 0;
                 DwmSetWindowAttribute(handle, 20, ref v, sizeof(int));
             }
+        }
+        // 辅助类：颜色表
+        private class ColorTable
+        {
+            public Color Win { get; set; }
+            public Color Pnl { get; set; }
+            public Color Img { get; set; }
+            public Color Txt { get; set; }
+            public Color Act { get; set; }
+            public Color Bdr { get; set; }
+            public Color InputActiveBg { get; set; }
+            public Color InputIdleBg { get; set; }
+            public Color InputActiveText { get; set; }
+            public Color InputIdleText { get; set; }
+            public Color BtnDefaultBg { get; set; }
+            public Color BtnActiveFore { get; set; }
         }
     }
 
