@@ -29,13 +29,14 @@
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
-            DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
-            DataGridViewCellStyle dataGridViewCellStyle5 = new DataGridViewCellStyle();
-            DataGridViewCellStyle dataGridViewCellStyle6 = new DataGridViewCellStyle();
-            DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
-            DataGridViewCellStyle dataGridViewCellStyle3 = new DataGridViewCellStyle();
-            DataGridViewCellStyle dataGridViewCellStyle4 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle7 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle11 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle12 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle8 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle9 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle10 = new DataGridViewCellStyle();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(LabelMinusForm));
+            SAVETimer = new System.Windows.Forms.Timer(components);
             PicView = new PictureBox();
             Menu = new MenuStrip();
             FileMenu = new ToolStripMenuItem();
@@ -144,6 +145,7 @@
             LabelMode = new Button();
             MessageTimer = new System.Windows.Forms.Timer(components);
             OpenTimer = new System.Windows.Forms.Timer(components);
+            button1 = new AntdUI.Button();
             ((System.ComponentModel.ISupportInitialize)PicView).BeginInit();
             Menu.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)LabelView).BeginInit();
@@ -169,6 +171,11 @@
             Toolpanel.SuspendLayout();
             panel1.SuspendLayout();
             SuspendLayout();
+            // 
+            // SAVETimer
+            // 
+            SAVETimer.Interval = 30000;
+            SAVETimer.Tick += SAVETimer_Tick;
             // 
             // PicView
             // 
@@ -510,39 +517,39 @@
             LabelView.BackgroundColor = Color.PeachPuff;
             LabelView.BorderStyle = BorderStyle.None;
             LabelView.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-            dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            dataGridViewCellStyle1.BackColor = SystemColors.Control;
-            dataGridViewCellStyle1.Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            dataGridViewCellStyle1.ForeColor = SystemColors.WindowText;
-            dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
-            dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
-            LabelView.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
+            dataGridViewCellStyle7.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridViewCellStyle7.BackColor = SystemColors.Control;
+            dataGridViewCellStyle7.Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            dataGridViewCellStyle7.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle7.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle7.SelectionForeColor = SystemColors.HighlightText;
+            LabelView.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle7;
             LabelView.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             LabelView.Columns.AddRange(new DataGridViewColumn[] { LabelIndex, LabelText, LabelGroup, indexDataGridViewTextBoxColumn, textDataGridViewTextBoxColumn, groupDataGridViewTextBoxColumn, positionDataGridViewTextBoxColumn, fontSizeDataGridViewTextBoxColumn, fontFamilyDataGridViewTextBoxColumn, remarkDataGridViewTextBoxColumn, originalTextDataGridViewTextBoxColumn });
             LabelView.ContextMenuStrip = LabelViewMenuStrip;
             LabelView.DataSource = imageLabelBindingSource;
-            dataGridViewCellStyle5.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle5.BackColor = SystemColors.Window;
-            dataGridViewCellStyle5.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            dataGridViewCellStyle5.ForeColor = SystemColors.ControlText;
-            dataGridViewCellStyle5.SelectionBackColor = Color.FromArgb(255, 192, 128);
-            dataGridViewCellStyle5.SelectionForeColor = SystemColors.ControlText;
-            dataGridViewCellStyle5.WrapMode = DataGridViewTriState.True;
-            LabelView.DefaultCellStyle = dataGridViewCellStyle5;
+            dataGridViewCellStyle11.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle11.BackColor = SystemColors.Window;
+            dataGridViewCellStyle11.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            dataGridViewCellStyle11.ForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle11.SelectionBackColor = Color.FromArgb(255, 192, 128);
+            dataGridViewCellStyle11.SelectionForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle11.WrapMode = DataGridViewTriState.True;
+            LabelView.DefaultCellStyle = dataGridViewCellStyle11;
             LabelView.Dock = DockStyle.Fill;
             LabelView.GridColor = SystemColors.GrayText;
             LabelView.Location = new Point(3, 3);
             LabelView.MultiSelect = false;
             LabelView.Name = "LabelView";
             LabelView.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-            dataGridViewCellStyle6.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle6.BackColor = SystemColors.Control;
-            dataGridViewCellStyle6.Font = new Font("Microsoft YaHei UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            dataGridViewCellStyle6.ForeColor = SystemColors.WindowText;
-            dataGridViewCellStyle6.SelectionBackColor = SystemColors.Highlight;
-            dataGridViewCellStyle6.SelectionForeColor = SystemColors.HighlightText;
-            dataGridViewCellStyle6.WrapMode = DataGridViewTriState.True;
-            LabelView.RowHeadersDefaultCellStyle = dataGridViewCellStyle6;
+            dataGridViewCellStyle12.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle12.BackColor = SystemColors.Control;
+            dataGridViewCellStyle12.Font = new Font("Microsoft YaHei UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            dataGridViewCellStyle12.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle12.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle12.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle12.WrapMode = DataGridViewTriState.True;
+            LabelView.RowHeadersDefaultCellStyle = dataGridViewCellStyle12;
             LabelView.RowHeadersVisible = false;
             LabelView.RowHeadersWidth = 62;
             LabelView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -552,9 +559,9 @@
             // LabelIndex
             // 
             LabelIndex.DataPropertyName = "Index";
-            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            dataGridViewCellStyle2.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            LabelIndex.DefaultCellStyle = dataGridViewCellStyle2;
+            dataGridViewCellStyle8.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridViewCellStyle8.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            LabelIndex.DefaultCellStyle = dataGridViewCellStyle8;
             LabelIndex.HeaderText = "序号";
             LabelIndex.MinimumWidth = 60;
             LabelIndex.Name = "LabelIndex";
@@ -566,8 +573,8 @@
             // 
             LabelText.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             LabelText.DataPropertyName = "Text";
-            dataGridViewCellStyle3.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            LabelText.DefaultCellStyle = dataGridViewCellStyle3;
+            dataGridViewCellStyle9.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            LabelText.DefaultCellStyle = dataGridViewCellStyle9;
             LabelText.HeaderText = "文本";
             LabelText.MinimumWidth = 8;
             LabelText.Name = "LabelText";
@@ -575,9 +582,9 @@
             // LabelGroup
             // 
             LabelGroup.DataPropertyName = "Group";
-            dataGridViewCellStyle4.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            dataGridViewCellStyle4.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            LabelGroup.DefaultCellStyle = dataGridViewCellStyle4;
+            dataGridViewCellStyle10.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridViewCellStyle10.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            LabelGroup.DefaultCellStyle = dataGridViewCellStyle10;
             LabelGroup.HeaderText = "组别";
             LabelGroup.MinimumWidth = 8;
             LabelGroup.Name = "LabelGroup";
@@ -976,6 +983,7 @@
             // 
             // Parampanel1
             // 
+            Parampanel1.Controls.Add(button1);
             Parampanel1.Controls.Add(Locationshowlabel);
             Parampanel1.Controls.Add(Locationlabel);
             Parampanel1.Controls.Add(GroupcomboBox);
@@ -1250,6 +1258,14 @@
             OpenTimer.Interval = 1000;
             OpenTimer.Tick += OpenTimer_Tick;
             // 
+            // button1
+            // 
+            button1.Location = new Point(38, 233);
+            button1.Name = "button1";
+            button1.Size = new Size(83, 33);
+            button1.TabIndex = 10;
+            button1.Text = "button1";
+            // 
             // LabelMinusForm
             // 
             AllowDrop = true;
@@ -1413,5 +1429,7 @@
         private DataGridViewTextBoxColumn remarkDataGridViewTextBoxColumn;
         private DataGridViewTextBoxColumn originalTextDataGridViewTextBoxColumn;
         private System.Windows.Forms.Timer OpenTimer;
+        private System.Windows.Forms.Timer SAVETimer;
+        private AntdUI.Button button1;
     }
 }

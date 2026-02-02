@@ -68,6 +68,7 @@ namespace mylabel
             SetMode("LabelMode");
             EnableDoubleBuffer(LabelView);
             UpdateContextMenuButtonState();
+            SAVETimer.Start();
         }
         private void LabelMinusForm_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -93,6 +94,8 @@ namespace mylabel
                 }
                 // 如果选 No，则不执行任何操作，窗体正常关闭
             }
+            SAVETimer?.Stop();
+            SAVETimer?.Dispose();
         }
 
         private void LabelMinusForm_FormClosed(object sender, FormClosedEventArgs e)
@@ -1835,6 +1838,83 @@ namespace mylabel
 
             return sfd.ShowDialog() == DialogResult.OK ? sfd.FileName : null;
         }
+        private void SAVETimer_Tick(object sender, EventArgs e)
+        {
+            PerformAutoSaveToHistory();
+        }
+        private void MaintainSaveQuotas(string folderName, int maxFiles)// 维护指定文件夹的文件数量，保留最新的 N 个文件
+        {
+            try
+            {
+                string savePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, folderName);
+
+                if (!Directory.Exists(savePath))
+                {
+                    Directory.CreateDirectory(savePath);
+                    return;
+                }
+
+                DirectoryInfo di = new DirectoryInfo(savePath);
+
+                // 获取所有文件，并按【最后修改时间】倒序排列（最新的在前）
+                var files = di.GetFiles()
+                              .OrderByDescending(f => f.LastWriteTime)
+                              .ToList();
+
+                // 如果文件总数超过了最大限制
+                if (files.Count > maxFiles)
+                {
+                    // 跳过前 50 个最新的，删除剩下的旧文件
+                    var filesToDelete = files.Skip(maxFiles);
+
+                    foreach (var file in filesToDelete)
+                    {
+                        try
+                        {
+                            file.Delete();
+                            System.Diagnostics.Debug.WriteLine($"SAVE 文件夹超额，已清理旧文件: {file.Name}");
+                        }
+                        catch (IOException) { /* 文件可能被占用 */ }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"维护 {folderName} 配额失败: {ex.Message}");
+            }
+        }
+        private void PerformAutoSaveToHistory()//自动保存
+        {
+            // 1. 基本检查
+            if (imageDatabase == null || imageDatabase.Count == 0) return;
+
+            try
+            {
+                // 2. 确定 SAVE 文件夹路径
+                string saveDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SAVE");
+                if (!Directory.Exists(saveDir)) Directory.CreateDirectory(saveDir);
+
+                // 3. 生成带时间戳的文件名 (例如: 我的翻译_20240520_143005.txt)
+                string baseName ="AutoSave";
+                string timeStamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string fileName = $"{baseName}_{timeStamp}.txt";
+                string fullPath = Path.Combine(saveDir, fileName);
+
+                // 4. 执行静默保存 (直接复用你的 LabelsToText 逻辑)
+                string outputText = mylabel.Modules.Modules.LabelsToText(imageDatabase, _currentProject.ZipName);
+                File.WriteAllText(fullPath, outputText, Encoding.UTF8);
+
+                // 5. 执行“末位淘汰”，确保只留 50 个
+                MaintainSaveQuotas("SAVE", 50);
+
+                // 6. 在状态栏静默提示 (假设你有一个 toolStripStatusLabel1)
+                // toolStripStatusLabel1.Text = $"历史副本已备份: {timeStamp}";
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"自动备份失败: {ex.Message}");
+            }
+        }
         #endregion
 
         private void OpenNowFolder_Click(object sender, EventArgs e)
@@ -2047,35 +2127,9 @@ namespace mylabel
 
 
         #endregion
-    }
-    public class ProjectContext
-    {
-        public string BaseFolderPath { get; set; } = string.Empty;// 显式存储文件夹路径        
-        public string TxtName { get; set; } = null;// 翻译文件路径（预览模式下为空）       
-        public string? ZipName { get; set; } = null;// 压缩包文件名（文件夹模式下为空）
-        public static ProjectContext Empty => new ProjectContext();
-        // 静态工厂方法：封装创建逻辑
-        public static ProjectContext Create(string baseFolder, string? txtName, string? zipName)
-        {
-            return new ProjectContext
-            {
-                BaseFolderPath = baseFolder,
-                TxtName = string.IsNullOrWhiteSpace(txtName) ? null : txtName,
-                ZipName = string.IsNullOrWhiteSpace(zipName) ? null : zipName
-            };
-        }
-        // 计算属性：翻译文件的文件名
-        public string TxtPath => !string.IsNullOrEmpty(TxtName)
-                ? Path.Combine(BaseFolderPath, TxtName)
-                : string.Empty;
 
-        // 计算属性：判断当前是否为压缩包模式
-        public string ZipPath => !string.IsNullOrEmpty(ZipName)
-                ? Path.Combine(BaseFolderPath, ZipName)
-                : string.Empty;
-        public bool IsArchiveMode => !string.IsNullOrEmpty(ZipName);
-        // 计算属性：生成标题栏文字
-        public string DisplayTitle => $"LabelMinus - {TxtName} [{(IsArchiveMode ? $"关联:{ZipName}" : "文件夹")}]";
+
     }
+    
 
 }

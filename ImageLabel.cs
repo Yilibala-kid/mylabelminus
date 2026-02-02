@@ -161,5 +161,35 @@ public readonly record struct BoundingBox(float X, float Y, float Width, float H
     public static BoundingBox Default => new(0, 0, 0, 0);
 }
 
+namespace mylabel
+{
+    public class ProjectContext
+    {
+        public string BaseFolderPath { get; set; } = string.Empty;// 显式存储文件夹路径        
+        public string TxtName { get; set; } = null;// 翻译文件路径（预览模式下为空）       
+        public string? ZipName { get; set; } = null;// 压缩包文件名（文件夹模式下为空）
+        public static ProjectContext Empty => new ProjectContext();
+        // 静态工厂方法：封装创建逻辑
+        public static ProjectContext Create(string baseFolder, string? txtName, string? zipName)
+        {
+            return new ProjectContext
+            {
+                BaseFolderPath = baseFolder,
+                TxtName = string.IsNullOrWhiteSpace(txtName) ? null : txtName,
+                ZipName = string.IsNullOrWhiteSpace(zipName) ? null : zipName
+            };
+        }
+        // 计算属性：翻译文件的文件名
+        public string TxtPath => !string.IsNullOrEmpty(TxtName)
+                ? Path.Combine(BaseFolderPath, TxtName)
+                : string.Empty;
 
-
+        // 计算属性：判断当前是否为压缩包模式
+        public string ZipPath => !string.IsNullOrEmpty(ZipName)
+                ? Path.Combine(BaseFolderPath, ZipName)
+                : string.Empty;
+        public bool IsArchiveMode => !string.IsNullOrEmpty(ZipName);
+        // 计算属性：生成标题栏文字
+        public string DisplayTitle => $"LabelMinus - {TxtName} [{(IsArchiveMode ? $"关联:{ZipName}" : "文件夹")}]";
+    }
+}
