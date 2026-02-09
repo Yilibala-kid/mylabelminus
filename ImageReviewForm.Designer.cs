@@ -49,11 +49,13 @@
             OpenPicandArc2 = new Button();
             ClearPic = new Button();
             tableLayoutPanel2 = new TableLayoutPanel();
+            panel7 = new Panel();
+            Swichpicture = new Button();
+            label1 = new Label();
             FittoReViewButton = new Button();
             panel2 = new Panel();
             LinkView = new Button();
             panel3 = new Panel();
-            label1 = new Label();
             panel4 = new Panel();
             label2 = new Label();
             ScreenShotFolderbutton = new Button();
@@ -69,6 +71,7 @@
             panel5.SuspendLayout();
             panel6.SuspendLayout();
             tableLayoutPanel2.SuspendLayout();
+            panel7.SuspendLayout();
             panel2.SuspendLayout();
             panel3.SuspendLayout();
             panel4.SuspendLayout();
@@ -326,10 +329,10 @@
             tableLayoutPanel2.ColumnStyles.Add(new ColumnStyle());
             tableLayoutPanel2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             tableLayoutPanel2.ColumnStyles.Add(new ColumnStyle());
+            tableLayoutPanel2.Controls.Add(panel7, 3, 0);
             tableLayoutPanel2.Controls.Add(FittoReViewButton, 0, 0);
             tableLayoutPanel2.Controls.Add(panel2, 2, 0);
             tableLayoutPanel2.Controls.Add(panel3, 4, 0);
-            tableLayoutPanel2.Controls.Add(label1, 3, 0);
             tableLayoutPanel2.Controls.Add(panel4, 1, 0);
             tableLayoutPanel2.Dock = DockStyle.Bottom;
             tableLayoutPanel2.Location = new Point(0, 511);
@@ -338,6 +341,38 @@
             tableLayoutPanel2.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             tableLayoutPanel2.Size = new Size(984, 50);
             tableLayoutPanel2.TabIndex = 4;
+            // 
+            // panel7
+            // 
+            panel7.Controls.Add(Swichpicture);
+            panel7.Controls.Add(label1);
+            panel7.Dock = DockStyle.Fill;
+            panel7.Location = new Point(543, 3);
+            panel7.Name = "panel7";
+            panel7.Size = new Size(357, 44);
+            panel7.TabIndex = 4;
+            // 
+            // Swichpicture
+            // 
+            Swichpicture.Dock = DockStyle.Left;
+            Swichpicture.Location = new Point(0, 0);
+            Swichpicture.Name = "Swichpicture";
+            Swichpicture.Size = new Size(50, 44);
+            Swichpicture.TabIndex = 4;
+            Swichpicture.Text = "交换";
+            Swichpicture.UseVisualStyleBackColor = true;
+            Swichpicture.Click += Swichpicture_Click;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Dock = DockStyle.Right;
+            label1.Location = new Point(199, 0);
+            label1.Name = "label1";
+            label1.Size = new Size(158, 34);
+            label1.TabIndex = 3;
+            label1.Text = "支持多选图片\r\n支持选择.zip/.7z/.rar压缩包";
+            label1.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // FittoReViewButton
             // 
@@ -378,17 +413,6 @@
             panel3.Name = "panel3";
             panel3.Size = new Size(75, 44);
             panel3.TabIndex = 4;
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Dock = DockStyle.Right;
-            label1.Location = new Point(742, 0);
-            label1.Name = "label1";
-            label1.Size = new Size(158, 50);
-            label1.TabIndex = 3;
-            label1.Text = "支持多选图片\r\n支持选择.zip/.7z/.rar压缩包";
-            label1.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // panel4
             // 
@@ -465,6 +489,8 @@
             panel6.ResumeLayout(false);
             tableLayoutPanel2.ResumeLayout(false);
             tableLayoutPanel2.PerformLayout();
+            panel7.ResumeLayout(false);
+            panel7.PerformLayout();
             panel2.ResumeLayout(false);
             panel3.ResumeLayout(false);
             panel4.ResumeLayout(false);
@@ -502,5 +528,7 @@
         private Button Openfolder2;
         private PictureBox ShowShotScreen;
         private Label label2;
+        private Panel panel7;
+        private Button Swichpicture;
     }
 }

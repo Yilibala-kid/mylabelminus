@@ -793,38 +793,185 @@ namespace mylabel
             }
             return entryNames;
         }
-        private void LoadFromArchive(Control pb, string zipPath, string entryKey, bool isLeft)
+        #region 右键加载
+        /// <summary>
+        /// 公开方法：直接加载路径到指定的左侧或右侧
+        /// </summary>
+        /// <param name="path">文件夹或压缩包路径</param>
+        /// <param name="isLeft">true 加载到左侧，false 加载到右侧</param>
+        public void LoadPathDirectly(string path, bool isLeft)
         {
+            if (string.IsNullOrEmpty(path)) return;
+
             try
             {
-                // 1. 确定临时保存路径 (使用不同的前缀防止左右窗口冲突)
-                string side = isLeft ? "left" : "right";
-                string tempDir = Path.Combine(Application.StartupPath, "Archivetemp");
-                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+                List<string> finalFiles = new List<string>();
+                string? zipPath = null;
 
-                string tempFile = Path.Combine(tempDir, $"zip_{side}_{Path.GetFileName(entryKey)}");
-
-                // 2. 解压条目
-                using (var archive = SharpCompress.Archives.ArchiveFactory.Open(zipPath))
+                if (Directory.Exists(path))
                 {
-                    var entry = archive.Entries.FirstOrDefault(e => e.Key == entryKey);
-                    if (entry != null)
+                    // --- 文件夹逻辑 ---
+                    finalFiles = Directory.GetFiles(path)
+                        .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                        .OrderBy(f => f)
+                        .ToList();
+                    zipPath = null;
+                }
+                else if (File.Exists(path))
+                {
+                    string ext = Path.GetExtension(path).ToLower();
+                    if (ext == ".zip" || ext == ".7z" || ext == ".rar")
                     {
-                        using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write))
-                        {
-                            entry.WriteTo(fs);
-                        }
-
-                        // 3. 调用你已有的通用加载函数
-                        ApplyImageToPictureBox(pb, tempFile);
+                        // --- 压缩包逻辑 ---
+                        zipPath = path;
+                        finalFiles = LoadEntriesFromZip(path);
                     }
+                }
+
+                if (finalFiles.Count == 0) return;
+
+                // 根据 isLeft 决定赋值给哪一组变量
+                if (isLeft)
+                {
+                    _leftZipPath = zipPath;
+                    _leftFolderFiles = finalFiles;
+                }
+                else
+                {
+                    _rightZipPath = zipPath;
+                    _rightFolderFiles = finalFiles;
+                }
+
+                // 加载完成后更新 UI
+                UpdateComboBox();
+
+                // 如果是左侧加载，默认选中第一项
+                if (isLeft && PicNamecomboBox.Items.Count > 0)
+                {
+                    PicNamecomboBox.SelectedIndex = 0;
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"解压失败: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"加载 {path} 到 {(isLeft ? "左" : "右")} 失败: {ex.Message}");
             }
         }
+        // 在类级别定义一个静态锁，确保同一时间只有一个解压任务操作磁盘
+        private static readonly object _zipLock = new object();
+
+        private void LoadFromArchive(Control pb, string zipPath, string entryKey, bool isLeft)
+        {
+            try
+            {
+                string tempDir = Path.Combine(Application.StartupPath, "Archivetemp");
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+
+                string side = isLeft ? "L" : "R";
+                string zipName = Path.GetFileNameWithoutExtension(zipPath);
+                string currentTempFile = GetCachePath(tempDir, side, zipName, entryKey);
+
+                // 1. 优先检查缓存（不需要锁，速度极快）
+                if (File.Exists(currentTempFile))
+                {
+                    ApplyImageToPictureBox(pb, currentTempFile);
+                }
+                else
+                {
+                    // 2. 缓存不存在，进入排队解压（加锁防止并发冲突）
+                    lock (_zipLock)
+                    {
+                        // 二次检查，防止排队期间另一个线程已经解压好了
+                        if (!File.Exists(currentTempFile))
+                        {
+                            ExtractSingleEntry(zipPath, entryKey, currentTempFile);
+                        }
+                    }
+                    ApplyImageToPictureBox(pb, currentTempFile);
+                }
+
+                // 3. 异步预解压（使用同一个锁在后台排队）
+                Task.Run(() =>
+                {
+                    lock (_zipLock)
+                    {
+                        try { PreloadNeighbors(zipPath, entryKey, isLeft, tempDir, zipName, side); }
+                        catch { /* 预载异常静默处理 */ }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                // 记录错误但不弹窗，防止连续切图时弹窗炸弹
+                //System.Diagnostics.Debug.WriteLine($"加载异常: {ex.Message}");
+            }
+        }
+
+        // 预加载核心逻辑
+        private void PreloadNeighbors(string zipPath, string currentKey, bool isLeft, string tempDir, string zipName, string side)
+        {
+            // 获取当前侧对应的文件列表
+            List<string> fileList = isLeft ? _leftFolderFiles : _rightFolderFiles;
+            if (fileList == null || fileList.Count <= 1) return;
+
+            // 查找当前索引 (列表里存的是 "[Zip]entryKey")
+            string fullKey = "[Zip]" + currentKey;
+            int index = fileList.IndexOf(fullKey);
+            if (index == -1) return;
+
+            // 准备需要预解压的索引列表（上一张和下一张）
+            List<int> neighborIndices = new List<int>();
+            if (index > 0) neighborIndices.Add(index - 1);
+            if (index < fileList.Count - 1) neighborIndices.Add(index + 1);
+
+            if (neighborIndices.Count == 0) return;
+
+            // 打开一次压缩包，批量解压邻居
+            using (var archive = SharpCompress.Archives.ArchiveFactory.Open(zipPath))
+            {
+                foreach (int i in neighborIndices)
+                {
+                    string neighborEntryKey = fileList[i].Replace("[Zip]", "");
+                    string neighborPath = GetCachePath(tempDir, side, zipName, neighborEntryKey);
+
+                    if (!File.Exists(neighborPath))
+                    {
+                        var entry = archive.Entries.FirstOrDefault(e => e.Key == neighborEntryKey);
+                        if (entry != null)
+                        {
+                            using (var fs = new FileStream(neighborPath, FileMode.Create, FileAccess.Write))
+                            {
+                                entry.WriteTo(fs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 辅助：生成缓存路径
+        private string GetCachePath(string dir, string side, string zipName, string key)
+        {
+            // 过滤掉 Key 中的非法路径字符
+            string safeKey = Path.GetFileName(key);
+            return Path.Combine(dir, $"cache_{side}_{zipName}_{safeKey}");
+        }
+
+        // 辅助：同步解压单张
+        private void ExtractSingleEntry(string zipPath, string entryKey, string outputPath)
+        {
+            using (var archive = SharpCompress.Archives.ArchiveFactory.Open(zipPath))
+            {
+                var entry = archive.Entries.FirstOrDefault(e => e.Key == entryKey);
+                if (entry != null)
+                {
+                    using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
+                    {
+                        entry.WriteTo(fs);
+                    }
+                }
+            }
+        }
+        #endregion
         private void ApplyImageToPictureBox(Control pb, string filePath)
         {
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
@@ -852,7 +999,7 @@ namespace mylabel
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"图片加载失败: {ex.Message}");
+                //MessageBox.Show($"图片加载失败: {ex.Message}");
                 return;
             }
 
@@ -1518,6 +1665,19 @@ namespace mylabel
         #endregion
 
 
+        private void Swichpicture_Click(object sender, EventArgs e)
+        {
+            (_leftFolderFiles, _rightFolderFiles) = (_rightFolderFiles, _leftFolderFiles);
+            (_leftZipPath, _rightZipPath) = (_rightZipPath, _leftZipPath);
+            if (PicNamecomboBox.Items.Count > 0)
+            {
+                // 重新触发一遍 SelectedIndexChanged，让左右 PictureBox 重新渲染新交换的数据
+                int currentIndex = PicNamecomboBox.SelectedIndex;
+
+                // 强制重置索引以触发事件（如果索引没变，手动调用加载方法）
+                PicNamecomboBox_SelectedIndexChanged(null, EventArgs.Empty);
+            }
+        }
     }
 
 }

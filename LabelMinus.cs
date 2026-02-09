@@ -40,7 +40,8 @@ namespace mylabel
 
         #region 窗口加载关闭要做的
         // 无参构造函数：负责基础初始化
-        public LabelMinusForm(string? initialPath = null)
+        private bool _pendingReviewRequest = false;
+        public LabelMinusForm(string? initialPath = null, bool isReview = false)
         {
             InitializeComponent();
 
@@ -50,6 +51,7 @@ namespace mylabel
             // 检查右键菜单状态（确保 EasyRightClick 此时不为 null）
             UpdateContextMenuButtonState();
 
+            _pendingReviewRequest = isReview;
             if (!string.IsNullOrEmpty(initialPath))
             {
                 // 第一个路径也放进缓冲区，利用计时器统一打开

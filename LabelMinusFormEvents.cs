@@ -517,8 +517,33 @@ namespace mylabel
         {
             string rawExePath = Application.ExecutablePath; // 获取当前程序完整路径
             string quotedExePath = $"\"{rawExePath}\"";
+            string[] reviewExtensions = { ".zip", ".7z", ".rar" }; // 压缩包扩展名
             try
             {
+                using (var key = Registry.ClassesRoot.CreateSubKey($@"Directory\shell\{ContextMenuName}_Review"))
+                {
+                    key.SetValue("", "使用 LabelMinus 图校");
+                    key.SetValue("Icon", $"{rawExePath},0");
+                    using (var cmd = key.CreateSubKey("command"))
+                    {
+                        // 关键点：末尾增加了 -review 参数
+                        cmd.SetValue("", $"{quotedExePath} \"%1\" -review");
+                    }
+                }
+
+                // 2. 处理压缩包的“图校”菜单
+                foreach (string ext in reviewExtensions)
+                {
+                    using (var key = Registry.ClassesRoot.CreateSubKey($@"SystemFileAssociations\{ext}\shell\{ContextMenuName}_Review"))
+                    {
+                        key.SetValue("", "使用 LabelMinus 图校");
+                        key.SetValue("Icon", $"{rawExePath},0");
+                        using (var cmd = key.CreateSubKey("command"))
+                        {
+                            cmd.SetValue("", $"{quotedExePath} \"%1\" -review");
+                        }
+                    }
+                }
                 foreach (string ext in TargetExtensions)
                 {
                     string keyPath = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}";
@@ -562,12 +587,21 @@ namespace mylabel
             {
                 foreach (string ext in TargetExtensions)
                 {
-                    string keyPath = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}";
-                    Registry.ClassesRoot.DeleteSubKeyTree(keyPath, false);
+                    // 删除普通打开菜单
+                    string standardKey = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}";
+                    Registry.ClassesRoot.DeleteSubKeyTree(standardKey, false);
+
+                    // 删除“图校”菜单
+                    string reviewKey = $@"SystemFileAssociations\{ext}\shell\{ContextMenuName}_Review";
+                    Registry.ClassesRoot.DeleteSubKeyTree(reviewKey, false);
                 }
 
                 // 清理文件夹注册
+                // 删除文件夹普通预览
                 Registry.ClassesRoot.DeleteSubKeyTree($@"Directory\shell\{ContextMenuName}", false);
+
+                // 删除文件夹“图校”
+                Registry.ClassesRoot.DeleteSubKeyTree($@"Directory\shell\{ContextMenuName}_Review", false);
             }
             catch (Exception ex)
             {
@@ -599,23 +633,54 @@ namespace mylabel
         private void OpenTimer_Tick(object sender, EventArgs e)
         {
             OpenTimer.Stop();
-            if (pathBuffer.Count > 0)
+            string[] pathsToOpen;
+            lock (pathBuffer) // 1. 必须加锁，应对右键选中大量文件时的并发写入
             {
-                // 一次性打开所有收集到的路径
-                string[] pathsToOpen = pathBuffer.ToArray();
+                if (pathBuffer.Count == 0) return;
+                pathsToOpen = pathBuffer.ToArray();
                 pathBuffer.Clear();
-                this.OpenResourceByPath(pathsToOpen, false);
             }
+            // 4. 处理图校模式
+            if (_pendingReviewRequest)
+            {
+                _pendingReviewRequest = false;
+
+                this.BeginInvoke(new Action(() => {
+                    // 1. 获取或创建图校窗口
+                    ImageReviewForm reviewForm = Application.OpenForms["ImageReviewForm"] as ImageReviewForm;
+                    if (reviewForm == null)
+                    {
+                        reviewForm = new ImageReviewForm(this);
+                        reviewForm.Show();
+                    }
+
+                    if (pathsToOpen.Length >= 1)
+                    {
+                        // 第一个选中的路径进左边
+                        reviewForm.LoadPathDirectly(pathsToOpen[0], true);
+                    }
+
+                    if (pathsToOpen.Length >= 2)
+                    {
+                        // 如果用户同时选中了两个，第二个进右边
+                        reviewForm.LoadPathDirectly(pathsToOpen[1], false);
+                    }
+
+                    reviewForm.Activate();
+                }));
+            }
+            else this.OpenResourceByPath(pathsToOpen, false);
         }
         // 暴露一个给外部调用的缓冲方法
-        public void EnqueuePaths(string path)
+        public void EnqueuePaths(string path, bool isReview = false)
         {
+            if (isReview) _pendingReviewRequest = true;
             if (string.IsNullOrEmpty(path)) return;
 
-            // 如果这是第一个路径，启动计时器
-            if (pathBuffer.Count == 0) OpenTimer.Start();
-
-            pathBuffer.Add(path);
+            lock (pathBuffer) // 1. 加上锁
+            {
+                pathBuffer.Add(path);
+            }
             OpenTimer.Stop();
             OpenTimer.Start();
         }
